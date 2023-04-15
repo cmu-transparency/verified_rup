@@ -29,6 +29,7 @@ class SDist(_sdist):
         cmd = ["dune", "clean"]
         subprocess.run(cmd, check=True, stdout=sys.stdout, stderr=sys.stderr)
         os.unlink("src/verified_rup/checker.so")
+        os.unlink("src/ocaml/rup.ml")
 
 class ForcedBinaryDistribution(Distribution):
     def has_ext_modules(foo):
