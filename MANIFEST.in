@@ -1,0 +1,2 @@
+include src/verified_rup/checker.so
+prune src/opam

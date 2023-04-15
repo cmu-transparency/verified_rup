@@ -1,0 +1,1160 @@
+module Rup
+
+use array.Array
+use mach.int.Int63
+use list.Append
+use list.Elements
+use list.HdTl
+use list.Length
+use list.List
+use list.Map
+use list.Mem
+use list.Reverse
+use map.Map as Map
+use option.Option
+use ref.Ref
+
+(****************************************************************************
+* Primary definitions
+*****************************************************************************)
+
+type var = int63
+type lit = { var : var ; sign : bool }
+type clause = list lit
+type cnf = list clause
+type valuation = Map.map var bool
+type chain = list lit
+type proof = list clause
+
+let function negate (l : lit) : lit =
+    { var = l.var ; sign = not l.sign }
+
+predicate negated (l : lit) (l' : lit) =
+    l' = negate l
+
+predicate clause_sat_with (rho : valuation) (c : clause) =
+    exists l . mem l c /\ Map.get rho l.var = l.sign
+
+predicate cnf_sat_with (rho : valuation) (cnf : cnf) =
+    forall c . mem c cnf -> clause_sat_with rho c
+
+predicate clause_trivial (c : clause) =
+    exists l . mem l c /\ mem (negate l) c
+
+predicate clause_redundant (c : clause) =
+    match c with
+    | Nil -> false
+    | Cons l ls -> mem l ls \/ clause_redundant ls
+    end
+
+predicate no_redundant_clauses (cnf : cnf) =
+    forall c . mem c cnf -> not (clause_redundant c)
+
+predicate clause_unit (c : clause) =
+    exists l . c = Cons l Nil
+
+predicate is_unit (l : lit) (cnf : cnf) =
+    mem (Cons l Nil) cnf
+
+predicate cnf_sat (cnf : cnf) =
+    exists rho . cnf_sat_with rho cnf
+
+predicate cnf_unsat (cnf : cnf) =
+    not (cnf_sat cnf)
+
+function clause_lits (c : clause) : Fset.fset lit =
+    match c with
+    | Nil -> Fset.empty
+    | Cons l c' -> Fset.add l (clause_lits c')
+    end
+
+let rec lemma clause_lits_mem (c : clause) (l : lit) =
+    ensures { Fset.mem l (clause_lits c) <-> mem l c }
+    variant { c }
+    match c with
+    | Nil -> ()
+    | Cons _ c' -> clause_lits_mem c' l
+    end
+
+function cnf_lits (cnf : cnf) : Fset.fset lit =
+    match cnf with
+    | Nil -> Fset.empty
+    | Cons c cs -> Fset.union (clause_lits c) (cnf_lits cs)
+    end
+
+let rec lemma cnf_lits_mem (cnf : cnf) (l : lit) =
+    ensures { Fset.mem l (cnf_lits cnf) <-> exists c . mem c cnf /\ mem l c }
+    variant { cnf }
+    match cnf with
+    | Nil -> ()
+    | Cons _ cs -> cnf_lits_mem cs l
+    end
+
+lemma empty_clause_unsat : forall rho .
+    not (clause_sat_with rho Nil)
+
+lemma conflict_cnf_unsat : forall cnf .
+    mem Nil cnf -> cnf_unsat cnf
+
+lemma empty_cnf_sat : forall rho .
+    cnf_sat_with rho Nil
+
+function remove_lit (l : lit) (c : clause) : clause =
+    match c with
+    | Nil -> Nil
+    | Cons l' ls ->
+        if l.var = l'.var /\ l.sign = l'.sign then ls
+        else Cons l' (remove_lit l ls)
+    end
+
+let rec lemma remove_lit_mem (l l' : lit) (c : clause) =
+    requires { not (clause_redundant c) }
+    ensures { mem l' (remove_lit l c) <-> (l'.var <> l.var \/ l'.sign <> l.sign) /\ mem l' c }
+    ensures { mem l' (remove_lit l c) <-> l' <> l /\ mem l' c }
+    ensures { not (mem l c) <-> remove_lit l c = c }
+    variant { c }
+    match c with
+    | Nil -> ()
+    | Cons _ ms -> remove_lit_mem l l' ms
+    end
+
+let rec lemma remove_lit_noneg (l : lit) (c : clause) =
+    requires { not (clause_redundant c) }
+    ensures { not (mem (negate l) (remove_lit (negate l) c)) }
+    variant { c }
+    match c with
+    | Nil -> ()
+    | Cons _ ms -> remove_lit_noneg l ms
+    end
+
+let rec lemma remove_lit_twice (l l' : lit) (c : clause) =
+    requires { not (clause_redundant c) }
+    requires { l <> l' /\ l <> negate l' }
+    ensures { remove_lit l (remove_lit l' c) = remove_lit l' (remove_lit l c) }
+    variant { c }
+    match c with
+    | Nil -> ()
+    | Cons _ ms -> remove_lit_twice l l' ms
+    end
+
+let rec lemma remove_lit_nil (l : lit) (c : clause) =
+    requires { not (clause_redundant c) }
+    ensures { remove_lit l c = Nil <-> (c = Cons l Nil \/ c = Nil) }
+    variant { c }
+    match c with
+    | Nil -> ()
+    | Cons _ ms -> remove_lit_nil l ms
+    end
+
+function remove_containing_lit (l : lit) (cnf : cnf) : cnf =
+    match cnf with
+    | Nil -> Nil
+    | Cons c cs -> 
+        if mem l c then remove_containing_lit l cs
+        else Cons c (remove_containing_lit l cs)
+    end
+
+let rec lemma rc_nolit (l : lit) (cnf : cnf) (c : clause) =
+    requires { mem c (remove_containing_lit l cnf) }
+    ensures { not (mem l c) }
+    variant { cnf }
+    match cnf with
+    | Nil -> absurd
+    | Cons _ cs ->
+        if mem c (remove_containing_lit l cs) then rc_nolit l cs c
+        else ()
+    end
+
+let rec lemma rc_subset (l : lit) (cnf : cnf) (c : clause) =
+    requires { mem c (remove_containing_lit l cnf) }
+    ensures { mem c cnf }
+    variant { cnf }
+    match cnf with
+    | Nil -> absurd
+    | Cons _ cs -> 
+        if mem c (remove_containing_lit l cs) then rc_subset l cs c
+        else ()
+    end
+
+let rec lemma rc_contains (l : lit) (cnf : cnf) (c : clause) =
+    requires { mem c cnf }
+    requires { not (mem l c) }
+    ensures { mem c (remove_containing_lit l cnf) }
+    variant { cnf }
+    match cnf with
+    | Nil -> absurd
+    | Cons _ cs -> 
+        if mem c cs then rc_contains l cs c
+        else ()
+    end
+
+let rec lemma rl_mem (l : lit) (cnf : cnf) (c : clause) =
+    requires { mem c (map (fun x -> remove_lit (negate l) x) cnf) }
+    ensures { exists c' . mem c' cnf /\ c = remove_lit (negate l) c' }
+    variant { cnf }
+    match cnf with
+    | Nil -> ()
+    | Cons _ ds ->
+        if mem c (map (fun x -> remove_lit (negate l) x) ds) then rl_mem l ds c
+        else ()
+    end
+
+let rec lemma rl_contains (l : lit) (cnf : cnf) (c : clause) =
+    requires { mem c cnf }
+    ensures { mem (remove_lit (negate l) c) (map (fun x -> remove_lit (negate l) x) cnf) }
+    variant { cnf }
+    match cnf with
+    | Nil -> absurd
+    | Cons _ ds ->
+        if mem c ds then rl_contains l ds c
+        else ()
+    end
+
+let rec lemma rl_no_redundant (l : lit) (c : clause) =
+    requires { not (clause_redundant c) }
+    ensures { not (clause_redundant (remove_lit (negate l) c)) }
+    variant { c }
+    match c with
+    | Nil -> ()
+    | Cons _ ms -> rl_no_redundant l ms
+    end
+
+function unit_prop (l : lit) (cnf : cnf) : cnf =
+    if is_unit l cnf then (
+        let no_neg = map (fun c -> remove_lit (negate l) c) cnf in
+        let no_pos = remove_containing_lit l no_neg in
+        Cons (Cons l Nil) no_pos
+    ) else cnf
+
+lemma unit_prop_unit : forall l cnf .
+    is_unit l cnf <-> is_unit l (unit_prop l cnf)
+
+let lemma unit_prop_noneg (l l' : lit) (cnf : cnf) =
+    requires { no_redundant_clauses cnf }
+    requires { is_unit l cnf /\ is_unit l' cnf }
+    requires { l <> negate l' }
+    ensures { is_unit l' (unit_prop l cnf) /\ is_unit l (unit_prop l' cnf) }
+    assert { remove_lit (negate l') (Cons l Nil) = Cons l Nil } ;
+    assert { remove_lit (negate l) (Cons l' Nil) = Cons l' Nil }
+
+let lemma unit_prop_nil (l : lit) (cnf : cnf) =
+    requires { mem Nil cnf }
+    requires { no_redundant_clauses cnf }
+    ensures { mem Nil (unit_prop l cnf) }
+    assert { remove_lit (negate l) Nil = Nil }
+
+let lemma unit_prop_neg (l : lit) (cnf : cnf) (c : clause) =
+    requires { no_redundant_clauses cnf }
+    requires { not (clause_redundant c) }
+    requires { is_unit l cnf }
+    requires { mem (negate l) c }
+    ensures { not (mem c (unit_prop l cnf)) }
+    if pure { exists c' . mem c' (unit_prop l cnf) /\ mem (negate l) c' } then (
+        let c' = any clause ensures { mem result (unit_prop l cnf) /\ mem (negate l) result } in
+        let no_neg = map (fun x -> remove_lit (negate l) x) cnf in
+        let no_pos = remove_containing_lit l no_neg in
+        assert { mem c' no_pos /\ mem c' no_neg } ;
+        assert { exists d . mem d cnf /\ remove_lit (negate l) d = c' } ;
+        absurd
+    )
+
+let lemma unit_prop_no_redundant (l : lit) (cnf : cnf) =
+    requires { no_redundant_clauses cnf }
+    ensures { no_redundant_clauses (unit_prop l cnf) }
+    let no_neg = map (fun c -> remove_lit (negate l) c) cnf in
+    let no_pos = remove_containing_lit l no_neg in
+    if pure { exists c . mem c (unit_prop l cnf) /\ clause_redundant c } then (
+        let c = any clause ensures { mem result (unit_prop l cnf) /\ clause_redundant result } in
+        assert { mem c no_pos /\ mem c no_neg } ;
+        let c' = any clause ensures { mem result cnf /\ remove_lit (negate l) result = c } in
+        assert { clause_redundant c' } ;
+        absurd
+    )
+
+lemma unit_prop_occ : forall l cnf c .
+    is_unit l cnf /\ mem l c /\ mem c (unit_prop l cnf) -> c = Cons l Nil
+
+let rec lemma unit_prop_clauses (l : lit) (cnf : cnf) (c : clause) =
+    requires { no_redundant_clauses cnf }
+    requires { not (clause_redundant c) }
+    requires { is_unit l cnf }
+    requires { not (mem l c) }
+    requires { mem c cnf }
+    ensures { mem (remove_lit (negate l) c) (unit_prop l cnf) }
+    variant { cnf }
+    match cnf with
+    | Nil -> absurd
+    | Cons _ ds ->
+        if is_unit l ds then (
+            if mem c ds then unit_prop_clauses l ds c
+            else ()
+        ) else (
+            let no_neg = map (fun x -> remove_lit (negate l) x) ds in
+            let no_pos = remove_containing_lit l no_neg in
+            assert { mem (remove_lit (negate l) c) no_pos } 
+        )
+    end
+
+let rec lemma unit_prop_preserve_right (l : lit) (cnf : cnf) (rho : valuation) =
+    requires { no_redundant_clauses cnf }
+    requires { is_unit l cnf }
+    requires { cnf_sat_with rho cnf }
+    ensures { cnf_sat_with rho (unit_prop l cnf) }
+    variant { cnf }
+    match cnf with
+    | Nil -> absurd
+    | Cons c cs -> 
+        if is_unit l cs then (
+            unit_prop_preserve_right l cs rho ;
+            assert { clause_sat_with rho c } ;
+            assert { cnf_sat_with rho (unit_prop l cs) } ;
+            if mem l c then (
+                assert { c <> Cons l Nil -> not (mem c (unit_prop l cs)) } ;
+                assert { cnf_sat_with rho (unit_prop l cnf) by unit_prop l cnf = unit_prop l cs }
+            ) else (
+                let c' = remove_lit (negate l) c in
+                let no_neg = map (fun c -> remove_lit (negate l) c) cnf in
+                assert { mem c' (unit_prop l cnf) by mem c' (remove_containing_lit l no_neg) } ;
+                assert { exists l' . mem l' c /\ Map.get rho l'.var = l'.sign } ;
+                let l' = any lit ensures { mem result c /\ Map.get rho result.var = result.sign } in
+                if l'.var = l.var then (
+                    assert { l' = negate l } ;
+                    assert { not (clause_sat_with rho (Cons l Nil)) } ;
+                    absurd
+                ) ;
+                assert { clause_sat_with rho (remove_lit (negate l) c) }
+            )
+        ) else (
+            assert { c = Cons l Nil } ;
+            assert { Map.get rho l.var = l.sign } ;
+            let cnf' = unit_prop l cnf in
+            if pure { exists c' . mem c' cnf' /\ not (clause_sat_with rho c') } then (
+                let c' = any clause ensures { mem result cnf' /\ not (clause_sat_with rho result) } in
+                let no_neg = map (fun c' -> remove_lit (negate l) c') cnf in
+                assert { mem c' no_neg } ;
+                let c'' = any clause ensures { mem result cnf /\ remove_lit (negate l) result = c' } in
+                assert { clause_sat_with rho c'' } ;
+                absurd
+            )
+        )
+    end
+
+let rec lemma unit_prop_preserve_left (l : lit) (cnf : cnf) (rho : valuation) =
+    requires { no_redundant_clauses cnf }
+    requires { is_unit l cnf }
+    requires { cnf_sat_with rho (unit_prop l cnf) }
+    ensures { cnf_sat_with rho cnf }
+    variant { cnf }
+    assert { Map.get rho l.var = l.sign by mem (Cons l Nil) (unit_prop l cnf) } ;
+    match cnf with
+    | Nil -> absurd
+    | Cons c cs -> 
+        if is_unit l cs then (
+            unit_prop_preserve_left l cs rho ;
+            assert { Map.get rho l.var = l.sign } ;
+            if pure { not (clause_sat_with rho c) } then (
+                (* let no_neg = map (fun c' -> remove_lit (negate l) c') cnf in *)
+                (* let no_pos = remove_containing_lit l no_neg in *)
+                let c' = remove_lit (negate l) c in
+                assert { clause_sat_with rho c' } ;
+                let l' = any lit ensures { mem result c' /\ Map.get rho result.var = result.sign } in
+                assert { clause_sat_with rho c by mem l' c } ;
+                absurd
+            )
+        ) else (
+            if pure { exists c' . mem c' cnf /\ not (clause_sat_with rho c') } then (
+                let c' = any clause ensures { mem result cnf /\ not (clause_sat_with rho result) } in
+                assert { not (mem l c') by not (clause_sat_with rho c') /\ Map.get rho l.var = l.sign } ;
+                assert { mem (remove_lit (negate l) c') (unit_prop l cnf) } ;
+                absurd
+            )
+        )
+    end
+
+lemma unit_prop_preserve : forall l cnf rho .
+    no_redundant_clauses cnf /\ is_unit l cnf -> (cnf_sat_with rho cnf <-> cnf_sat_with rho (unit_prop l cnf))
+
+let lemma unit_prop_preserve_unsat (l : lit) (cnf : cnf) =
+    requires { no_redundant_clauses cnf }
+    requires { is_unit l cnf }
+    ensures { cnf_unsat cnf <-> cnf_unsat (unit_prop l cnf) }
+    if pure { exists rho . not (cnf_sat_with rho cnf) /\ cnf_sat_with rho (unit_prop l cnf) } then
+        absurd
+    else if pure { exists rho . cnf_sat_with rho cnf /\ not (cnf_sat_with rho (unit_prop l cnf)) } then
+        absurd
+
+predicate is_unit_chain (cnf : cnf) (chain : chain) =
+    match chain with
+    | Nil -> true
+    | Cons l ls -> is_unit l cnf /\ is_unit_chain (unit_prop l cnf) ls
+    end
+
+function bcp (cnf : cnf) (chain : chain) : cnf =
+    match chain with
+    | Nil -> cnf
+    | Cons l ls ->
+        if is_unit l cnf then bcp (unit_prop l cnf) ls
+        else cnf
+    end
+
+let rec lemma nil_unit_chain (cnf : cnf) (chain : chain) =
+    requires { no_redundant_clauses cnf }
+    requires { is_unit_chain cnf chain }
+    requires { forall l . not (is_unit l cnf) }
+    ensures { chain = Nil }
+    variant { chain }
+    match chain with
+    | Nil -> ()
+    | Cons _ _ -> absurd
+    end
+
+let rec lemma unit_chain_preserves_right (cnf : cnf) (chain : chain) (rho : valuation) =
+    requires { no_redundant_clauses cnf }
+    requires { is_unit_chain cnf chain }
+    requires { cnf_sat_with rho cnf }
+    ensures { cnf_sat_with rho (bcp cnf chain) }
+    variant { chain }
+    match chain with
+    | Nil -> ()
+    | Cons l ls -> unit_chain_preserves_right (unit_prop l cnf) ls rho
+    end
+
+let rec lemma unit_chain_preserves_left (cnf : cnf) (chain : chain) (rho : valuation) =
+    requires { no_redundant_clauses cnf }
+    requires { is_unit_chain cnf chain }
+    requires { cnf_sat_with rho (bcp cnf chain) }
+    ensures { cnf_sat_with rho cnf }
+    variant { chain }
+    match chain with
+    | Nil -> ()
+    | Cons l ls -> unit_chain_preserves_left (unit_prop l cnf) ls rho
+    end
+
+lemma unit_chain_preserves_sat : forall cnf chain rho .
+    no_redundant_clauses cnf /\ is_unit_chain cnf chain -> (cnf_sat_with rho cnf <-> cnf_sat_with rho (bcp cnf chain))
+
+let lemma unit_chain_preserves_unsat (cnf : cnf) (chain : chain) =
+    requires { no_redundant_clauses cnf }
+    requires { is_unit_chain cnf chain }
+    ensures { cnf_unsat cnf <-> cnf_unsat (bcp cnf chain) }
+    if pure { exists rho . not (cnf_sat_with rho cnf) /\ cnf_sat_with rho (bcp cnf chain) } then
+        absurd
+    else if pure { exists rho . cnf_sat_with rho cnf /\ not (cnf_sat_with rho (bcp cnf chain)) } then
+        absurd
+
+predicate props_to_conflict (cnf : cnf) =
+    exists chain . is_unit_chain cnf chain /\ mem Nil (bcp cnf chain)
+
+lemma props_to_conflict_unsat : forall cnf .
+    no_redundant_clauses cnf /\ props_to_conflict cnf -> cnf_unsat cnf
+
+let rec function negate_clause (c : clause) : cnf =
+    match c with
+    | Nil -> Cons (Cons {var=0 ; sign=true} (Cons {var=0 ; sign=false} Nil)) Nil
+    | Cons l Nil -> Cons (Cons (negate l) Nil) Nil
+    | Cons l ls -> Cons (Cons (negate l) Nil) (negate_clause ls)
+    end
+
+let rec lemma negated_all_units (c c' : clause) =
+    requires { mem c' (negate_clause c) }
+    requires { c <> Nil }
+    ensures { exists l . mem (negate l) c /\ c' = (Cons l Nil) }
+    variant { c }
+    match c with
+    | Nil -> absurd
+    | Cons _ _ -> () 
+    | Cons _ ls -> 
+        if mem c' (negate_clause ls) then negated_all_units ls c'
+        else ()
+    end
+
+let rec lemma negated_contents (c : clause) =
+    requires { c <> Nil }
+    ensures { forall l . mem l c <-> mem (Cons (negate l) Nil) (negate_clause c) }
+    variant { c }
+    match c with
+    | Nil -> absurd
+    | Cons _ Nil -> ()
+    | Cons _ ls -> negated_contents ls
+    end
+
+let rec lemma negated_conflict (c : clause) =
+    requires { cnf_unsat (negate_clause c) }
+    ensures { exists l . is_unit l (negate_clause c) /\ is_unit (negate l) (negate_clause c) }
+    variant { c }
+    match c with
+    | Nil -> assert { not (cnf_unsat (negate_clause c)) 
+                        by exists rho . cnf_sat_with rho (negate_clause Nil)
+                        by forall rho . cnf_sat_with rho (negate_clause Nil) } ;
+    | Cons l Nil -> assert { cnf_sat_with (fun _ -> not l.sign) (negate_clause c) }
+    | Cons l ls ->
+        if is_unit l (negate_clause ls) then ()
+        else (
+            if cnf_unsat (negate_clause ls) then negated_conflict ls
+            else 
+                let rho = any valuation ensures { cnf_sat_with result (negate_clause ls) } in
+                let rho' = Map.set rho l.var (not l.sign) in
+                if not (cnf_sat_with rho' (negate_clause ls)) then (
+                    let c' = any clause ensures { not (clause_sat_with rho' result) /\ mem result (negate_clause ls) } in
+                    let l' = any lit ensures { c' = Cons result Nil } in
+                    assert { Map.get rho l.var = l.sign } ;
+                    assert { is_unit l (negate_clause ls) by l' = l } 
+                ) else 
+                    assert { cnf_sat_with rho' (negate_clause c) }
+        )
+    end
+
+let lemma unsat_append (cnf cnf' : cnf) =
+    requires { no_redundant_clauses cnf /\ no_redundant_clauses cnf' }
+    requires { cnf_unsat (cnf ++ cnf') }
+    requires { forall rho . cnf_sat_with rho cnf' }
+    ensures { cnf_unsat cnf }
+    if pure { exists rho . cnf_sat_with rho cnf } then (
+        let rho = any valuation ensures { cnf_sat_with result cnf } in
+        assert { cnf_sat_with rho cnf' } ;
+        assert { forall c . mem c cnf' -> clause_sat_with rho c } ;
+        assert { forall c . mem c cnf -> clause_sat_with rho c } ;
+        assert { forall c . mem c (cnf ++ cnf') -> clause_sat_with rho c } ;
+        assert { cnf_sat_with rho (cnf ++ cnf') } ;
+        absurd
+    )
+
+let rec lemma no_neg_eq (l : lit) (cnf : cnf) =
+    requires { no_redundant_clauses cnf }
+    requires { forall c . mem c cnf -> not (mem (negate l) c) }
+    ensures { cnf = map (fun c -> remove_lit (negate l) c) cnf }
+    variant { cnf }
+    match cnf with
+    | Nil -> ()
+    | Cons c cs -> 
+        assert { c = remove_lit (negate l) c } ;
+        no_neg_eq l cs
+    end
+
+let rec lemma no_pos_eq (l : lit) (cnf : cnf) =
+    requires { no_redundant_clauses cnf }
+    requires { forall c . mem c cnf -> not (mem l c) }
+    ensures { cnf = remove_containing_lit l (Cons (Cons l Nil) cnf) }
+    variant { cnf }
+    match cnf with
+    | Nil -> ()
+    | Cons _ cs -> no_pos_eq l cs
+    end
+
+let lemma unit_prop_idempotent (l : lit) (cnf : cnf) =
+    requires { no_redundant_clauses cnf }
+    requires { is_unit l cnf }
+    ensures { unit_prop l (unit_prop l cnf) = unit_prop l cnf }
+    let no_neg = map (fun c -> remove_lit (negate l) c) cnf in
+    let no_pos = remove_containing_lit l no_neg in
+    let up_l_cnf = Cons (Cons l Nil) no_pos in
+    let no_neg' = map (fun c -> remove_lit (negate l) c) up_l_cnf in
+    let no_pos' = remove_containing_lit l no_neg' in
+    let up_l_up_l_cnf = Cons (Cons l Nil) no_pos' in
+    assert { up_l_cnf = unit_prop l cnf } ;
+    assert { up_l_up_l_cnf = unit_prop l up_l_cnf } ;
+    assert { no_neg' = up_l_cnf } ;
+    assert { no_pos' = no_pos }
+
+let rec lemma is_unit_chain_after_prop (cnf : cnf) (l : lit) (chain : chain) =
+  requires { is_unit_chain cnf (Cons l chain) }
+  ensures { is_unit_chain (unit_prop l cnf) chain }
+  variant { chain }
+  match chain with
+  | Nil -> ()
+  | Cons l' ls ->
+      (* let up_l_cnf = unit_prop l' (unit_prop l cnf) in *)
+      (* let up_cnf = unit_prop l' cnf in *)
+      assert { is_unit l' (unit_prop l cnf) } ;
+      assert { is_unit_chain (unit_prop l cnf) (Cons l' ls) } ;
+      is_unit_chain_after_prop (unit_prop l cnf) l' ls
+  end
+
+let lemma nil_props_conflict (cnf : cnf) (l : lit) =
+    requires { mem Nil cnf }
+    requires { is_unit l cnf }
+    ensures { props_to_conflict (unit_prop l cnf) }
+    assert { mem Nil (unit_prop l cnf) } ;
+    assert { is_unit_chain (unit_prop l cnf) Nil /\ 
+             mem Nil (bcp (unit_prop l cnf) Nil) } 
+
+let rec lemma unit_prop_poss (l : lit) (cnf : cnf) (c : clause) =
+    requires { no_redundant_clauses cnf }
+    requires { mem c cnf }
+    requires { is_unit l cnf }
+    requires { not (mem l c) /\ not (mem (negate l) c) }
+    ensures { mem c (unit_prop l cnf) }
+    let no_neg = map (fun c' -> remove_lit (negate l) c') cnf in
+    let no_pos = remove_containing_lit l no_neg in
+    assert { mem c no_neg by not (mem (negate l) c) } ;
+    assert { mem c no_pos }
+
+let lemma unit_swap (cnf : cnf) (l l' : lit) =
+    (* Why in the world is this lemma so hard to prove? *)
+    requires { no_redundant_clauses cnf }
+    requires { is_unit l cnf /\ is_unit l' cnf }
+    requires { l <> l' /\ l <> negate l' }
+    ensures { forall c . mem c (unit_prop l (unit_prop l' cnf)) <-> 
+              mem c (unit_prop l' (unit_prop l cnf)) }
+
+    let up_l_cnf = unit_prop l cnf in
+    let up_l'_cnf = unit_prop l' cnf in
+
+    assert { is_unit l up_l'_cnf } ;
+    assert { is_unit l' up_l_cnf } ;
+
+    let up_l_up_l'_cnf = unit_prop l up_l'_cnf in
+    let up_l'_up_l_cnf = unit_prop l' up_l_cnf in
+
+    (* let no_neg_l = map (fun c -> remove_lit (negate l) c) cnf in
+    let no_neg_l' = map (fun c -> remove_lit (negate l') c) cnf in *)
+
+    (* let no_pos_l_no_neg_l' = remove_containing_lit l no_neg_l' in
+    let no_pos_l'_no_neg_l = remove_containing_lit l' no_neg_l in *)
+
+    assert { forall c . mem c up_l_cnf -> (c = Cons l Nil \/ not (mem l c)) /\ not (mem (negate l) c) } ;
+    assert { forall c . mem c up_l'_cnf -> (c = Cons l' Nil \/ not (mem l' c)) /\ not (mem (negate l') c) } ;
+    
+    assert { forall c . mem c cnf /\ not (mem l c) /\ not (mem (negate l) c) -> mem c up_l_cnf } ;
+    assert { forall c . mem c cnf /\ not (mem l' c) /\ not (mem (negate l') c) -> mem c up_l'_cnf } ;
+
+    assert { forall c . mem c (remove_containing_lit l (map (fun c' -> remove_lit (negate l) c') up_l'_cnf)) -> 
+             mem c (map (fun c' -> remove_lit (negate l) c') up_l'_cnf) } ;
+    assert { forall c . mem c (remove_containing_lit l' (map (fun c' -> remove_lit (negate l') c') up_l_cnf)) -> 
+             mem c (map (fun c' -> remove_lit (negate l') c') up_l_cnf) } ;
+
+    assert { forall c . mem c (map (fun c' -> remove_lit (negate l) c') up_l'_cnf) -> 
+             not (mem (negate l') c) /\ not (mem (negate l) c) /\ (c = Cons l' Nil \/ not (mem l' c)) } ;
+    assert { forall c . mem c (map (fun c' -> remove_lit (negate l') c') up_l_cnf) -> 
+             not (mem (negate l') c) /\ not (mem (negate l) c) /\ (c = Cons l Nil \/ not (mem l c)) } ;
+    
+    assert { forall c . mem c up_l_up_l'_cnf -> 
+             (c = (Cons l Nil) \/ c = (Cons l' Nil) \/ (not (mem l c) /\ not (mem l' c))) } ;
+    assert { forall c . mem c up_l_up_l'_cnf -> 
+             not (mem (negate l) c) /\ not (mem (negate l') c) } ;
+    
+    assert { forall c . mem c up_l'_up_l_cnf -> 
+             (c = (Cons l Nil) \/ c = (Cons l' Nil) \/ (not (mem l c) /\ not (mem l' c))) } ;
+    assert { forall c . mem c up_l'_up_l_cnf -> 
+             not (mem (negate l) c) /\ not (mem (negate l') c) } ;
+
+    assert { forall c . mem c cnf /\ not (mem l c) /\ not (mem (negate l) c) /\ not (mem l' c) /\ not (mem (negate l') c) -> mem c up_l'_up_l_cnf } ;
+    assert { forall c . mem c cnf /\ not (mem l c) /\ not (mem (negate l) c) /\ not (mem l' c) /\ not (mem (negate l') c) -> mem c up_l_up_l'_cnf } ;
+
+    if pure { exists c . mem c up_l_up_l'_cnf /\ not (mem c up_l'_up_l_cnf) } then (
+        let c = any clause ensures { mem result up_l_up_l'_cnf /\ not (mem result up_l'_up_l_cnf) } in
+        assert { c <> Cons l Nil /\ c <> Cons l' Nil } ;
+        assert { not (mem (negate l) c) /\ not (mem (negate l') c) /\ not (mem l c) /\ not (mem l' c) } ;
+        if not (mem c cnf) then (
+            assert { mem c (map (fun c -> remove_lit (negate l) c) up_l'_cnf) } ;
+            assert { mem c up_l'_cnf \/ exists c' . mem c' up_l'_cnf /\ c = remove_lit (negate l) c' } ;
+            if mem c up_l'_cnf then (
+                assert { mem c (map (fun c -> remove_lit (negate l') c) cnf) } ;
+                assert { mem c cnf \/ exists c' . mem c' cnf /\ c = remove_lit (negate l') c' } ;
+                if mem c cnf then absurd
+                else absurd
+            ) else (
+                let c' = any clause ensures { mem result up_l'_cnf /\ c = remove_lit (negate l) result } in
+                assert { mem c' (map (fun c -> remove_lit (negate l') c) cnf) } ;
+                assert { mem c' cnf \/ exists c'' . mem c'' cnf /\ c' = remove_lit (negate l') c'' } ;
+                if mem c' cnf then absurd
+                else (
+                    let c'' = any clause ensures { mem result cnf /\ c' = remove_lit (negate l') result } in
+                    let c''' = remove_lit (negate l) c'' in
+                    assert { c = remove_lit (negate l) (remove_lit (negate l') c'') } ;
+                    assert { c = remove_lit (negate l') c''' } ;
+                    assert { mem (remove_lit (negate l') c''') up_l'_up_l_cnf } ;
+                    absurd
+                )
+            )
+        ) ;
+        assert { mem c cnf } ;
+        absurd
+    ) ;
+    assert { forall c . mem c up_l_up_l'_cnf -> mem c up_l'_up_l_cnf } ;
+
+    if pure { exists c . mem c up_l'_up_l_cnf /\ not (mem c up_l_up_l'_cnf) } then (
+        let c = any clause ensures { mem result up_l'_up_l_cnf /\ not (mem result up_l_up_l'_cnf) } in
+        assert { c <> Cons l Nil /\ c <> Cons l' Nil } ;
+        assert { not (mem (negate l) c) /\ not (mem (negate l') c) /\ not (mem l c) /\ not (mem l' c) } ;
+        if not (mem c cnf) then (
+            assert { mem c (map (fun c -> remove_lit (negate l') c) up_l_cnf) } ;
+            assert { mem c up_l_cnf \/ exists c' . mem c' up_l_cnf /\ c = remove_lit (negate l') c' } ;
+            if mem c up_l_cnf then (
+                assert { mem c (map (fun c -> remove_lit (negate l) c) cnf) } ;
+                assert { mem c cnf \/ exists c' . mem c' cnf /\ c = remove_lit (negate l) c' } ;
+                if mem c cnf then absurd
+                else absurd
+            ) else (
+                let c' = any clause ensures { mem result up_l_cnf /\ c = remove_lit (negate l') result } in
+                assert { mem c' (map (fun c -> remove_lit (negate l) c) cnf) } ;
+                assert { mem c' cnf \/ exists c'' . mem c'' cnf /\ c' = remove_lit (negate l) c'' } ;
+                if mem c' cnf then absurd
+                else (
+                    let c'' = any clause ensures { mem result cnf /\ c' = remove_lit (negate l) result } in
+                    let c''' = remove_lit (negate l') c'' in
+                    assert { c = remove_lit (negate l') (remove_lit (negate l) c'') } ;
+                    assert { c = remove_lit (negate l) c''' } ;
+                    assert { mem (remove_lit (negate l) c''') up_l_up_l'_cnf } ;
+                    absurd
+                )
+            )
+        ) ;
+        assert { mem c cnf } ;
+        absurd
+    ) ;
+    assert { forall c . mem c up_l'_up_l_cnf -> mem c up_l_up_l'_cnf } 
+
+let lemma unit_prop_nomatter (cnf cnf' : cnf) (l : lit) =
+    requires { no_redundant_clauses cnf /\ no_redundant_clauses cnf' }
+    requires { is_unit l cnf }
+    requires { forall c . mem c cnf <-> mem c cnf' }
+    ensures { forall c . mem c (unit_prop l cnf) <-> mem c (unit_prop l cnf') }
+    assert { is_unit l cnf' } ;
+    let no_neg = map (fun c -> remove_lit (negate l) c) cnf in
+    let no_neg' = map (fun c -> remove_lit (negate l) c) cnf' in
+    let no_pos = remove_containing_lit l no_neg in
+    let no_pos' = remove_containing_lit l no_neg' in
+    assert { forall c . mem c no_neg <-> mem c no_neg' } ;
+    assert { forall c . mem c no_pos <-> mem c no_pos' } ;
+    if pure { exists c . mem c (unit_prop l cnf) /\ not (mem c (unit_prop l cnf')) } then (
+        let c = any clause ensures { mem result (unit_prop l cnf) /\ not (mem result (unit_prop l cnf')) } in
+        assert { mem c no_pos' by mem c no_pos } ;
+        absurd
+    ) ;
+    if pure { exists c . mem c (unit_prop l cnf') /\ not (mem c (unit_prop l cnf)) } then (
+        let c = any clause ensures { mem result (unit_prop l cnf') /\ not (mem result (unit_prop l cnf)) } in
+        assert { mem c no_pos by mem c no_pos' } ;
+        absurd
+    )
+
+let rec lemma unit_chain_nomatter (cnf cnf' : cnf) (chain : chain) =
+    requires { no_redundant_clauses cnf /\ no_redundant_clauses cnf' }
+    requires { is_unit_chain cnf chain }
+    requires { forall c . mem c cnf <-> mem c cnf' }
+    ensures { is_unit_chain cnf' chain }
+    variant { chain }
+    match chain with
+    | Nil -> ()
+    | Cons l ls -> unit_chain_nomatter (unit_prop l cnf) (unit_prop l cnf') ls
+    end
+
+let rec lemma bcp_nomatter (cnf cnf' : cnf) (chain : chain) =
+    requires { no_redundant_clauses cnf /\ no_redundant_clauses cnf' }
+    requires { is_unit_chain cnf chain }
+    requires { forall c . mem c cnf <-> mem c cnf' }
+    ensures { forall c . mem c (bcp cnf chain) <-> mem c (bcp cnf' chain) }
+    variant { chain }
+    match chain with
+    | Nil -> ()
+    | Cons l ls -> bcp_nomatter (unit_prop l cnf) (unit_prop l cnf') ls
+    end
+
+let rec lemma unit_always_chain (cnf : cnf) (l : lit) (chain : chain) =
+    requires { no_redundant_clauses cnf }
+    requires { is_unit_chain cnf chain }
+    requires { is_unit l cnf }
+    requires { forall l' . mem l' chain -> l <> negate l' }
+    ensures { is_unit_chain (unit_prop l cnf) chain }
+    variant { chain }
+    match chain with
+    | Nil -> ()
+    | Cons l' chain' ->
+        let up_cnf = unit_prop l' cnf in
+        assert { is_unit l' cnf } ;
+        assert { is_unit_chain cnf (Cons l' chain') } ;
+        if pure { l = l' } then (
+            assert { is_unit_chain (unit_prop l cnf) chain' } ;
+            assert { unit_prop l (unit_prop l cnf) = unit_prop l cnf } ;
+            assert { is_unit l (unit_prop l cnf) } ;
+        ) else if pure { l = negate l' } then (
+            absurd
+        ) else (
+            unit_always_chain up_cnf l chain' ;
+            assert { is_unit_chain (unit_prop l (unit_prop l' cnf)) chain' } ;
+            unit_swap cnf l l' ;
+            unit_chain_nomatter (unit_prop l (unit_prop l' cnf)) (unit_prop l' (unit_prop l cnf)) chain' ;
+            assert { is_unit_chain (unit_prop l' (unit_prop l cnf)) chain' } ;
+            assert { is_unit_chain (unit_prop l cnf) (Cons l' chain') } 
+        )
+    end
+
+let rec lemma prop_preserves_prop (cnf : cnf) (l : lit) (chain : chain) =
+    (* This is surprisingly difficult to prove: if a CNF propagates to a conflict,
+       then the CNF that comes from propagating a unit literal will also propagate
+       to a conflict. Having this simplifies the verification of do_bcp below. *)
+    requires { no_redundant_clauses cnf }
+    requires { is_unit_chain cnf chain }
+    requires { mem Nil (bcp cnf chain) }
+    requires { is_unit l cnf }
+    ensures { props_to_conflict (unit_prop l cnf) }
+    variant { chain }
+    match chain with
+    | Nil -> ()
+    | Cons l' chain' ->
+        if mem Nil cnf then assert { mem Nil (unit_prop l cnf) } 
+        else (
+            (* let up_cnf = unit_prop l cnf in *)
+            if pure { l = negate l' } then (
+                assert { remove_lit (negate l) (Cons (negate l) Nil) = Nil } ;
+                assert { is_unit_chain cnf (Cons l Nil) }
+            ) else if pure { l = l' } then 
+                assert { mem Nil (bcp (unit_prop l cnf) chain') } 
+            else (
+                if pure { chain' = Nil } then (
+                    assert { is_unit_chain (unit_prop l cnf) (Cons l' Nil) } ;
+                    if pure { not (mem (Cons (negate l') Nil) cnf) } then (
+                        assert { remove_lit (negate l') (Cons (negate l') Nil) = Nil } ;
+                        if pure { not (exists c . mem c cnf /\ remove_lit (negate l') c = Nil) } then (
+                            let no_neg = map (fun c -> remove_lit (negate l') c) cnf in
+                            let no_pos = remove_containing_lit l' no_neg in
+                            assert { mem Nil no_pos /\ mem Nil no_neg } ;
+                            absurd
+                        ) ;
+                        let c = any clause ensures { remove_lit (negate l') result = Nil /\ mem result cnf } in
+                        assert { c = Cons (negate l') Nil } ;
+                        absurd
+                    ) ;
+                    if pure { not (mem (Cons (negate l') Nil) (unit_prop l cnf)) } then (
+                        assert { l <> l' } ;
+                        absurd
+                    ) ;
+                    unit_prop_nil l (unit_prop l' cnf) 
+                ) else (
+                    prop_preserves_prop (unit_prop l' cnf) l chain' ;
+                    let chain'' = any chain ensures { is_unit_chain (unit_prop l (unit_prop l' cnf)) result /\ 
+                                                      mem Nil (bcp (unit_prop l (unit_prop l' cnf)) result) } in
+                    if not (is_unit_chain (unit_prop l cnf) (Cons l' (Cons l chain''))) then (
+                        if not (is_unit_chain (unit_prop l' (unit_prop l cnf)) (Cons l chain'')) then (
+                            assert { not (is_unit_chain (unit_prop l (unit_prop l' (unit_prop l cnf))) chain'') } ;
+                            absurd
+                        ) ;
+                        absurd
+                    ) ;
+                    if not (is_unit_chain (unit_prop l cnf) (Cons l' chain'')) then (
+                        if not (is_unit_chain (unit_prop l (unit_prop l' cnf)) (Cons l' chain'')) then (
+                            assert { not (is_unit_chain (unit_prop l' (unit_prop l (unit_prop l' cnf))) chain'') } ;
+                            absurd
+                        ) ;
+                        absurd
+                    ) ;
+                    assert { bcp (unit_prop l cnf) (Cons l' chain'') = bcp (unit_prop l' (unit_prop l cnf)) chain'' } ;
+                    assert { mem Nil (bcp cnf (Cons l (Cons l' chain''))) }
+                ) 
+            )
+        )
+    end
+
+predicate implied (cnf : cnf) (c : clause) =
+    forall rho . cnf_sat_with rho cnf -> clause_sat_with rho c
+
+let rec lemma implied_clause (cnf : cnf) (c : clause) =
+    requires { no_redundant_clauses cnf }
+    requires { not (clause_redundant c) }
+    requires { cnf_unsat (cnf ++ negate_clause c) }
+    ensures { implied cnf c }
+    variant { cnf }
+    let c' = negate_clause c in
+    if pure { c = Nil } then (
+        assert { forall rho . cnf_sat_with rho c' } ;
+        assert { cnf_unsat cnf }
+    ) else (
+        if pure { exists rho . cnf_sat_with rho cnf /\ not (clause_sat_with rho c) } then (
+            let rho = any valuation ensures { cnf_sat_with result cnf /\ not (clause_sat_with result c) } in
+            assert { forall l . mem l c -> Map.get rho l.var = not l.sign } ;
+            if pure { forall c' . mem c' (cnf ++ negate_clause c) -> clause_sat_with rho c' } then
+                assert { not (cnf_unsat (cnf ++ negate_clause c)) 
+                            by cnf_sat_with rho (cnf ++ negate_clause c) }
+            else
+                assert { not (cnf_sat_with rho (negate_clause c)) 
+                            by forall c' . mem c' cnf -> clause_sat_with rho c'  }
+        )
+    )
+
+predicate rup (cnf : cnf) (c : clause) =
+    props_to_conflict (cnf ++ (negate_clause c))
+
+lemma rup_implied : forall cnf c .
+    no_redundant_clauses cnf /\ not (clause_redundant c) /\ rup cnf c -> implied cnf c
+
+predicate valid_proof (cnf : cnf) (pf : proof) =
+    match pf with
+    | Nil -> props_to_conflict cnf
+    | Cons c cs -> rup cnf c /\ valid_proof (Cons c cnf) cs
+    end
+
+let rec lemma valid_proof_means_unsat (cnf : cnf) (pf : proof) =
+    requires { no_redundant_clauses cnf }
+    requires { no_redundant_clauses pf }
+    requires { valid_proof cnf pf }
+    ensures { cnf_unsat cnf }
+    variant { pf }
+    match pf with
+    | Nil -> ()
+    | Cons c cs -> 
+        valid_proof_means_unsat (Cons c cnf) cs ;
+        if pure { exists rho . cnf_sat_with rho cnf } then
+            let rho = any valuation ensures { cnf_sat_with result cnf } in
+            assert { cnf_sat_with rho (Cons c cnf) by 
+                        clause_sat_with rho c /\ forall c' . mem c' cnf -> clause_sat_with rho c' }
+    end
+
+(*************************************************************)
+(* Implementation                                            *)
+(*************************************************************)
+
+let rec function do_mem (x : 'a) (xs : list 'a) (eq : 'a -> 'a -> bool) : bool =
+    requires { forall y . eq x y <-> x = y }
+    ensures { result = mem x xs }
+    match xs with
+    | Nil -> false
+    | Cons y ys -> (eq x y) || do_mem x ys eq
+    end
+
+let predicate (==) (x y : bool) : bool =
+    (x && y) || (not x && not y)
+
+let predicate lit_eq (l1 l2 : lit) =
+    ensures { result <-> l1.var = l2.var && l1.sign = l2.sign }
+    l1.var = l2.var && l1.sign == l2.sign
+
+let rec function do_remove_containing_lit (l : lit) (cnf : cnf) : cnf =
+    ensures { result = remove_containing_lit l cnf }
+    variant { cnf }
+    match cnf with
+    | Nil -> Nil
+    | Cons c cs -> 
+        if do_mem l c lit_eq then do_remove_containing_lit l cs
+        else Cons c (do_remove_containing_lit l cs)
+    end
+
+let rec function check_unit (l : lit) (cnf : cnf) : bool =
+    ensures { result = is_unit l cnf }
+    match cnf with
+    | Nil -> false
+    | Cons c cs -> 
+        match c with
+        | Nil -> check_unit l cs
+        | Cons l' Nil -> lit_eq l l' || check_unit l cs
+        | Cons _ _ -> check_unit l cs
+        end
+    end
+
+let rec function do_remove_lit (l : lit) (c : clause) : clause =
+    requires { not (clause_redundant c) }
+    ensures { result = remove_lit l c }
+    ensures { not (clause_redundant result) }
+    variant { c }
+    match c with
+    | Nil -> Nil
+    | Cons l' c' -> 
+        if lit_eq l l' then do_remove_lit l c' 
+        else Cons l' (do_remove_lit l c')
+    end
+
+let function do_unit_prop (l : lit) (cnf : cnf) : cnf =
+    requires { no_redundant_clauses cnf }
+    ensures { result = unit_prop l cnf }
+    assert { forall c . mem c cnf -> not (clause_redundant c) } ;
+    let rec function do_map (l' : lit) (xs : cnf) : cnf =
+        requires { no_redundant_clauses xs }
+        ensures { result = map (fun x -> remove_lit l' x) xs }
+        ensures { no_redundant_clauses result }
+        variant { xs }
+        match xs with
+        | Nil -> Nil
+        | Cons x xs' -> Cons (do_remove_lit l' x) (do_map l' xs')
+        end
+    in
+    if check_unit l cnf then
+        let no_neg = do_map (negate l) cnf in
+        let no_pos = do_remove_containing_lit l no_neg in (
+            assert { no_neg = map (fun c -> remove_lit (negate l) c) cnf } ;
+            Cons (Cons l Nil) no_pos
+        )
+    else cnf
+
+let rec function find_unit (cnf : cnf) (ignore : chain) : option lit =
+    ensures { match result with
+              | None -> forall l . (not (is_unit l cnf) \/ mem l ignore)
+              | Some l -> Fset.mem l (cnf_lits cnf) /\ is_unit l cnf /\ not (mem l ignore)
+              end }
+    match cnf with
+    | Nil -> None
+    | Cons c cs -> 
+        match c with
+        | Nil -> find_unit cs ignore
+        | Cons l Nil -> if do_mem l ignore lit_eq then find_unit cs ignore else Some l
+        | Cons _ _ -> find_unit cs ignore
+        end
+    end
+
+let rec predicate clause_eq (c1 c2 : clause) =
+    ensures { result <-> c1 = c2 }
+    variant { c1, c2 }
+    match c1, c2 with
+    | Nil, Nil -> true
+    | Cons l1 c1', Cons l2 c2' -> lit_eq l1 l2 && clause_eq c1' c2'
+    | _, _ -> false
+    end
+
+let rec lemma exhausted_chains (cnf : cnf) (chain : chain) =
+    requires { no_redundant_clauses cnf }
+    requires { forall l . is_unit l cnf -> forall c . mem c (unit_prop l cnf) <-> mem c cnf }
+    requires { is_unit_chain cnf chain }
+    ensures { forall c . mem c (bcp cnf chain) <-> mem c cnf }
+    variant { chain }
+    match chain with
+    | Nil -> ()
+    | Cons l chain' -> 
+        let cnf' = do_unit_prop l cnf in
+        assert { forall c . mem c cnf <-> mem c cnf' } ;
+        exhausted_chains cnf' chain'
+    end
+
+let rec lemma prop_preserves_fixed (cnf : cnf) (l l' : lit) =
+    requires { no_redundant_clauses cnf }
+    requires { is_unit l cnf /\ is_unit l' cnf }
+    requires { l <> negate l' }
+    requires { forall c . mem c (unit_prop l' cnf) <-> mem c cnf }
+    ensures { forall c . mem c (unit_prop l' (unit_prop l cnf)) <-> mem c (unit_prop l cnf) }
+    variant { cnf }
+    if pure { l = l' } then ()
+    else (
+        if pure { exists c . mem c (unit_prop l' (unit_prop l cnf)) /\ not (mem c (unit_prop l cnf)) } then (
+            let c = any clause ensures { mem result (unit_prop l' (unit_prop l cnf)) /\ not (mem result (unit_prop l cnf)) } in
+            let cnf' = unit_prop l cnf in
+            let no_neg = map (fun c -> remove_lit (negate l') c) cnf' in
+            (* let no_pos = remove_containing_lit l' no_neg in *)
+            assert { not (mem c cnf) } ;
+            assert { mem c no_neg } ;
+            let c' = any clause ensures { c = remove_lit (negate l') result /\ mem result cnf' } in
+            assert { mem (negate l') c' by c' <> c } ;
+            let no_neg' = map (fun c -> remove_lit (negate l) c) cnf in
+            (* let no_pos' = remove_containing_lit l no_neg' in *)
+            assert { mem c' no_neg' } ;
+            let c'' = any clause ensures { c' = remove_lit (negate l) result /\ mem result cnf } in
+            assert { mem (negate l') c'' } ;
+            absurd 
+        ) ;
+        if pure { exists c . not (mem c (unit_prop l' (unit_prop l cnf))) /\ mem c (unit_prop l cnf) } then absurd
+    )
+
+let rec do_bcp (cnf : cnf) (prop : list lit) (ghost poss_lits : Fset.fset lit) : (chain, cnf, bool) =
+    requires { no_redundant_clauses cnf }
+    requires { forall l . Fset.mem l (cnf_lits cnf) /\ not (mem l prop) -> Fset.mem l poss_lits }
+    requires { forall l . mem l prop -> is_unit l cnf }
+    requires { forall l . mem l prop -> forall c . mem c (unit_prop l cnf) <-> mem c cnf }
+    ensures { let (chain', cnf', conflict) = result in 
+              is_unit_chain cnf chain' /\ 
+              cnf' = bcp cnf chain' /\
+              (mem Nil cnf' <-> conflict) /\
+              (conflict <-> props_to_conflict cnf) }
+    variant { Fset.cardinal poss_lits }
+    match find_unit cnf prop with
+    | None ->
+        let ghost b = mem Nil cnf in
+        if pure { forall l . not (is_unit l cnf) } then
+            assert { forall chain . is_unit_chain cnf chain -> chain = Nil } 
+        else (
+            assert { forall l . is_unit l cnf -> mem l prop } ;
+            assert { forall l . is_unit l cnf -> forall c . mem c (unit_prop l cnf) <-> mem c cnf } ;
+            assert { forall chain . is_unit_chain cnf chain -> forall c . mem c (bcp cnf chain) <-> mem c cnf } 
+        ) ;
+        assert { b -> props_to_conflict cnf by mem Nil (bcp cnf Nil) } ;
+        (Nil, cnf, do_mem Nil cnf clause_eq)
+    | Some l -> 
+        let cnf' = (do_unit_prop l cnf) in
+        if pure { exists l' . Fset.mem l' (cnf_lits cnf') /\ not (mem l' (Cons l prop)) /\ not (Fset.mem l' (Fset.remove l poss_lits)) } then (
+            let l' = any lit ensures { Fset.mem result (cnf_lits cnf') /\ not (mem result (Cons l prop)) /\ not (Fset.mem result (Fset.remove l poss_lits)) } in
+            assert { l <> l' -> (Fset.mem l' poss_lits <-> Fset.mem l' (Fset.remove l poss_lits)) } ;
+            if pure { l = l' } then absurd 
+            else (
+                let c = any clause ensures { mem result cnf' /\ mem l' result } in
+                let c' = any clause ensures { c = remove_lit (negate l) result /\ mem result cnf 
+                                              by mem c (map (fun c -> remove_lit (negate l) c) cnf) } in
+                assert { mem l' c' } ;
+                absurd
+            ) ;
+            absurd
+        ) ;
+        let (chain, cnf', conflict) = do_bcp cnf' (Cons l prop) (Fset.remove l poss_lits) in
+        if pure { not conflict /\ props_to_conflict cnf } then (
+            let ghost chain' = any chain ensures { is_unit_chain cnf result /\ 
+                                                   mem Nil (bcp cnf result) } in
+            (* let ghost chain'' = any chain ensures { is_unit_chain (unit_prop l cnf) result /\ 
+                                                    not (mem Nil (bcp (unit_prop l cnf) result)) } in *)
+            match chain' with
+            | Nil -> assert { mem Nil (bcp (unit_prop l cnf) Nil) by mem Nil (unit_prop l cnf) } ; absurd
+            | Cons l' ls' -> 
+                if pure { l = l' } then (
+                    assert { mem Nil (bcp (unit_prop l cnf) ls') } ;
+                    absurd
+                ) ;
+                assert { l <> l' } ;
+                if pure { l = negate l' } then (
+                    assert { remove_lit (negate l) (Cons (negate l) Nil) = Nil } ;
+                    absurd
+                ) ;
+                assert { is_unit_chain (unit_prop l' cnf) ls' } ;
+                absurd
+            end 
+        ) ;
+        (Cons l chain, cnf', conflict)
+    end
+
+let check_rup (cnf : cnf) (c : clause) : bool =
+    requires { no_redundant_clauses cnf }
+    requires { not (clause_redundant c) }
+    ensures { result <-> rup cnf c }
+    let _, _, conflict = do_bcp (cnf ++ (negate_clause c)) Nil (cnf_lits (cnf ++ (negate_clause c))) in
+    conflict
+
+let rec check_proof (cnf : cnf) (pf : proof) : bool =
+    requires { no_redundant_clauses cnf }
+    requires { no_redundant_clauses pf }
+    ensures { result <-> valid_proof cnf pf }
+    variant { pf }
+    match pf with
+    | Nil -> let _, _, conflict = do_bcp cnf Nil (cnf_lits cnf) in conflict
+    | Cons c cs -> check_rup cnf c && check_proof (Cons c cnf) cs
+    end
+
+let rec remove_redundant_clauses (cnf : cnf) : cnf =
+    ensures { no_redundant_clauses result }
+    ensures { forall rho . cnf_sat_with rho cnf <-> cnf_sat_with rho result }
+    variant { cnf }
+    let rec remove_redundant_lits (c : clause) : clause =
+        ensures { not (clause_redundant result) }
+        ensures { forall l . mem l c <-> mem l result }
+        ensures { forall rho . clause_sat_with rho c <-> clause_sat_with rho result }
+        variant { c }
+        match c with
+        | Nil -> Nil
+        | Cons l ls -> 
+            if do_mem l ls lit_eq then remove_redundant_lits ls
+            else Cons l (remove_redundant_lits ls)
+        end
+    in
+    match cnf with
+    | Nil -> Nil
+    | Cons c cs -> 
+        let c' = remove_redundant_lits c in
+        let cs' = remove_redundant_clauses cs in
+        let cnf' = Cons c' cs' in
+        if pure { exists rho . cnf_sat_with rho cnf /\ not (cnf_sat_with rho cnf') } then (
+            let rho = any valuation ensures { cnf_sat_with result cnf /\ not (cnf_sat_with result cnf') } in
+            assert { clause_sat_with rho c' } ;
+            assert { cnf_sat_with rho cs' } ;
+            absurd
+        ) ;
+        if pure { exists rho . cnf_sat_with rho cnf' /\ not (cnf_sat_with rho cnf) } then (
+            let rho = any valuation ensures { cnf_sat_with result cnf' /\ not (cnf_sat_with result cnf) } in
+            assert { clause_sat_with rho c } ;
+            assert { cnf_sat_with rho cs } ;
+            absurd
+        ) ;
+        cnf'
+    end
+
+end

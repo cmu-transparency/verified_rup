@@ -1,1 +1,1 @@
-# verified_rup
+# Verified DRUP Certificate Checker
