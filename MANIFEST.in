@@ -1,2 +1,3 @@
-include src/verified_rup/checker.so
-prune src/opam
+include src/rup/librupchecker.so
+prune src/librupchecker
+prune tests

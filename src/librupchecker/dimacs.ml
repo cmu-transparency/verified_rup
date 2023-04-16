@@ -61,17 +61,15 @@
           in parse_clause [] true l
  
  let rec parse_cnf_file = function
-   | []     -> ([], "0")
-   | "p"::"cnf"::nvars::_::l -> (parse_cnf_list [] l, nvars)
+   | []     -> []
+   | "p"::"cnf"::_::_::l -> parse_cnf_list [] l
    | a::l -> parse_cnf_file l
  
  let parse_drup_file = function
    | []     -> []
    | l      -> parse_cnf_list [] l
  
- let parse_cnf x =
-   let clause_list, nvars = (list_from_string (read_from_file x) [] 0 |> parse_cnf_file) in
-   clause_list
+ let parse_cnf x = (list_from_string (read_from_file x) [] 0 |> parse_cnf_file) 
  
  let parse_drup x =
    let clause_list = (list_from_string (read_from_file x) [] 0 |> parse_drup_file) in

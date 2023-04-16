@@ -3,18 +3,18 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "verified_rup"
+name = "rup"
 version = "1.0.0"
 authors = [
   { name="Matt Fredrikson", email="mfredrik@cmu.edu" },
 ]
-description = "Checks DRUP proofs against DIMACS source. Extracted from Why3 code that verifies total correctness"
+description = "Checks DRUP proofs against DIMACS source. Extracted from verified Why3 code."
 readme = "README.md"
 requires-python = ">=3.6"
 classifiers = [
     "Programming Language :: Python :: 3",
-	"Programming Language :: Ocaml :: 4.13",
-	"Programming Language :: Why3 :: 1.5.1",
+    "Programming Language :: Ocaml :: 4.13",
+    "Programming Language :: Why3 :: 1.5.1",
     "License :: OSI Approved :: MIT License",
     "Operating System :: Linux"
 ]

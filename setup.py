@@ -5,14 +5,13 @@ import subprocess
 import setuptools
 
 from pathlib import Path
-from setuptools import setup
-from setuptools.dist import Distribution
+from setuptools import setup, Extension
 from setuptools.command.sdist import sdist as _sdist
 
 def extract_checker():
     cmd = [
         "why3", "extract", "-D", "ocaml64", 
-        "src/ocaml/rup_pure.mlw", "-o", "src/ocaml/rup.ml"
+        "src/librupchecker/rup_pure.mlw", "-o", "src/librupchecker/rup.ml"
     ]
     subprocess.run(cmd, check=True, stdout=sys.stdout, stderr=sys.stderr)
 
@@ -24,21 +23,16 @@ class SDist(_sdist):
     def run(self) -> None:
         extract_checker()
         build_checker()
-        shutil.copy("_build/default/src/ocaml/checker.so", "src/verified_rup/checker.so")
+        shutil.copy("_build/default/src/librupchecker/checker.so", "src/rup/librupchecker.so")
         super().run()
         cmd = ["dune", "clean"]
         subprocess.run(cmd, check=True, stdout=sys.stdout, stderr=sys.stderr)
-        os.unlink("src/verified_rup/checker.so")
-        os.unlink("src/ocaml/rup.ml")
-
-class ForcedBinaryDistribution(Distribution):
-    def has_ext_modules(foo):
-        return True
+        os.unlink("src/rup/librupchecker.so")
+        os.unlink("src/librupchecker/rup.ml")
 
 setup(
     cmdclass={'sdist': SDist},
-    packages=['verified_rup'],
-    package_dir={'verified_rup': 'src/verified_rup'},
-    package_data={'checker': ['checker.so']},
-    distclass=ForcedBinaryDistribution
+    packages=['rup'],
+    package_dir={'rup': 'src/rup'},
+    ext_modules=[Extension(name="rup.librupchecker", sources=[])]
 )
