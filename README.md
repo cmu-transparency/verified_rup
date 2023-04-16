@@ -6,6 +6,12 @@ The core of the checker is written in [Why3](https://why3.lri.fr/), which is ext
 * The checker does not support DRAT proofs, but this may be added in the future.
 * The current implementation is not optimized, and will be considerably slower than [DRAT-trim](https://github.com/marijnheule/drat-trim) on large proofs.
 * Accordingly, the frontend does not accept proofs in binary format.
+* There is currently no CLI, but one can be written as needed in a few minutes using the API described below.
+
+The verification can be checked by running `src/librupchecker/rup_pure.mlw` in Why3. 
+Most of the verification conditions complete with the `Auto level 0` tactic, and the rest either with a few levels of splitting followed by `Auto 0` or `Auto 1`, or simply with `Auto 2`.
+It was developed using Why3 1.5.1, Alt-Ergo 2.4.0, Z3 4.8.6, and CVC4 1.8.
+Verification has not been attempted with earlier versions of Why3 or the provers.
 
 ## Installation
 
