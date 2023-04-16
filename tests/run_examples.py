@@ -1,43 +1,43 @@
 import os
 import unittest
 import glob
-import rup
+import drup
 
 class ExampleTestCase(unittest.TestCase):
     
-    def __init__(self, dimacs, drup):
+    def __init__(self, dimacs, proof):
         super().__init__()
         self.dimacs = dimacs
-        self.drup = drup
+        self.proof = proof
     
     def test_from_file(self):
-        print(f"Checking {self.dimacs} and {self.drup} from file...")
-        self.assertEqual(rup.check_from_files(self.dimacs, self.drup), 0)
+        print(f"Checking {self.dimacs} and {self.proof} from file...")
+        self.assertEqual(drup.check_from_files(self.dimacs, self.proof), 0)
 
     def test_from_string(self):
-        print(f"Checking {self.dimacs} and {self.drup} from string...")
+        print(f"Checking {self.dimacs} and {self.proof} from string...")
         with open(self.dimacs, 'r') as f:
             dimacs = f.read()
-        with open(self.drup, 'r') as f:
-            drup = f.read()
-        self.assertEqual(rup.check_from_strings(dimacs, drup), 0)
+        with open(self.proof, 'r') as f:
+            proof = f.read()
+        self.assertEqual(drup.check_from_strings(dimacs, proof), 0)
 
     def test_corrupt_proof(self):
-        print(f"Checking {self.dimacs} and {self.drup} with corrupted proof...")
+        print(f"Checking {self.dimacs} and {self.proof} with corrupted drup...")
         with open(self.dimacs, 'r') as f:
             dimacs = f.read()
-        with open(self.drup, 'r') as f:
-            drup = f.read()
-        drup_lines = drup.splitlines()
-        drup = '\n'.join(drup_lines[len(drup_lines)//2:])
-        self.assertEqual(rup.check_from_strings(dimacs, drup), -1)
+        with open(self.proof, 'r') as f:
+            proof = f.read()
+        proof_lines = proof.splitlines()
+        proof = '\n'.join(proof_lines[len(proof_lines)//2:])
+        self.assertEqual(drup.check_from_strings(dimacs, proof), -1)
 
     def test_from_file(self):
-        print(f"Checking {self.dimacs} and {self.drup} with corrupted path...")
+        print(f"Checking {self.dimacs} and {self.proof} with corrupted path...")
         with self.assertRaises(ValueError):
-            rup.check_from_files(self.dimacs + '.bogus', self.drup)
+            drup.check_from_files(self.dimacs + '.bogus', self.proof)
         with self.assertRaises(ValueError):
-            rup.check_from_files(self.dimacs, self.drup + '.bogus')
+            drup.check_from_files(self.dimacs, self.proof + '.bogus')
     
     def runTest(self):
         self.test_from_file()
@@ -53,9 +53,9 @@ def suite():
         test = base.split(".")[0]
         if not os.path.exists(f'{dir}/{test}.drup'):
             continue
-        drup = f'{dir}/{test}.drup'
+        proof = f'{dir}/{test}.drup'
         suite.addTest(ExampleTestCase
-    (dimacs, drup))
+    (dimacs, proof))
     
     return suite
 

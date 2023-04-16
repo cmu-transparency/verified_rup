@@ -23,16 +23,16 @@ class SDist(_sdist):
     def run(self) -> None:
         extract_checker()
         build_checker()
-        shutil.copy("_build/default/src/librupchecker/checker.so", "src/rup/librupchecker.so")
+        shutil.copy("_build/default/src/librupchecker/checker.so", "src/drup/librupchecker.so")
         super().run()
         cmd = ["dune", "clean"]
-        subprocess.run(cmd, check=True, stdout=sys.stdout, stderr=sys.stderr)
-        os.unlink("src/rup/librupchecker.so")
+        subprocess.run(cmd, check=False, stdout=sys.stdout, stderr=sys.stderr)
+        os.unlink("src/drup/librupchecker.so")
         os.unlink("src/librupchecker/rup.ml")
 
 setup(
     cmdclass={'sdist': SDist},
-    packages=['rup'],
-    package_dir={'rup': 'src/rup'},
-    ext_modules=[Extension(name="rup.librupchecker", sources=[])]
+    packages=['drup'],
+    package_dir={'drup': 'src/drup'},
+    ext_modules=[Extension(name="drup.librupchecker", sources=[])]
 )

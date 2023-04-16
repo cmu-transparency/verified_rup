@@ -17,7 +17,7 @@ Verification has not been attempted with earlier versions of Why3 or the provers
 
 If you use a recent Linux distribution on x86_64, you should be able to install the compiled wheel from PyPI:
 ```bash
-$ pip install rup
+$ pip install drup
 ```
 Otherwise, `pip` will attempt to extract and compile the library, which means that you need to have OCaml (>= 4.12), Why3 (>= 1.5.1), and Dune (>=2.9.3) installed.
 The most straightforward way to install these is to use [opam](https://opam.ocaml.org/doc/Install.html), which is available in most package systems, and then install Why3 and Dune (a sufficiently recent version of OCaml should already be installed with Opam): 
@@ -50,7 +50,7 @@ If the arguments given to the Python bindings cannot be opened (in the case of f
 
 As described, the package is straightforward to use:
 ```python
-import rup
+import drup
 
 cnf = """
 p cnf 4 8
@@ -71,7 +71,7 @@ pf = """
 0
 """
 
-if rup.check_from_strings(cnf, pf) == 0:
+if drup.check_from_strings(cnf, pf) == 0:
     print("Valid")
 else:
     print("Invalid")
