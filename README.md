@@ -19,14 +19,24 @@ If you use a recent Linux distribution on x86_64, you should be able to install 
 ```bash
 $ pip install drup
 ```
-Otherwise, `pip` will attempt to extract and compile the library, which means that you need to have OCaml (>= 4.12), Why3 (>= 1.5.1), and Dune (>=2.9.3) installed.
+Otherwise, you need to have OCaml (>= 4.12), Why3 (>= 1.5.1), and Dune (>=2.9.3) installed.
 The most straightforward way to install these is to use [opam](https://opam.ocaml.org/doc/Install.html), which is available in most package systems, and then install Why3 and Dune (a sufficiently recent version of OCaml should already be installed with Opam): 
 ```bash
 $ opam install why3 dune
 ```
 If you do not intend to check the verification of the library or develop it further, then you do not need to install Why3's IDE or any of the solvers that it supports.
 
-Once OCaml and Why3 are installed, you can use the `pip` command above to compile and install the library from source.
+Once OCaml and Why3 are installed, make sure that Python `build` is installed:
+```bash
+$ pip install build
+```
+Then, clone this repository, build, and install the package:
+```bash
+$ git clone https://github.com/cmu-transparency/verified_rup.git
+$ cd verified_rup
+$ python -m build
+$ pip install dist/*.whl
+```
 
 ## Usage
 

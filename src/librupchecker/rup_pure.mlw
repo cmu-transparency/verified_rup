@@ -353,8 +353,6 @@ let rec lemma unit_prop_preserve_left (l : lit) (cnf : cnf) (rho : valuation) =
             unit_prop_preserve_left l cs rho ;
             assert { Map.get rho l.var = l.sign } ;
             if pure { not (clause_sat_with rho c) } then (
-                (* let no_neg = map (fun c' -> remove_lit (negate l) c') cnf in *)
-                (* let no_pos = remove_containing_lit l no_neg in *)
                 let c' = remove_lit (negate l) c in
                 assert { clause_sat_with rho c' } ;
                 let l' = any lit ensures { mem result c' /\ Map.get rho result.var = result.sign } in
@@ -563,8 +561,6 @@ let rec lemma is_unit_chain_after_prop (cnf : cnf) (l : lit) (chain : chain) =
   match chain with
   | Nil -> ()
   | Cons l' ls ->
-      (* let up_l_cnf = unit_prop l' (unit_prop l cnf) in *)
-      (* let up_cnf = unit_prop l' cnf in *)
       assert { is_unit l' (unit_prop l cnf) } ;
       assert { is_unit_chain (unit_prop l cnf) (Cons l' ls) } ;
       is_unit_chain_after_prop (unit_prop l cnf) l' ls
@@ -605,12 +601,6 @@ let lemma unit_swap (cnf : cnf) (l l' : lit) =
 
     let up_l_up_l'_cnf = unit_prop l up_l'_cnf in
     let up_l'_up_l_cnf = unit_prop l' up_l_cnf in
-
-    (* let no_neg_l = map (fun c -> remove_lit (negate l) c) cnf in
-    let no_neg_l' = map (fun c -> remove_lit (negate l') c) cnf in *)
-
-    (* let no_pos_l_no_neg_l' = remove_containing_lit l no_neg_l' in
-    let no_pos_l'_no_neg_l = remove_containing_lit l' no_neg_l in *)
 
     assert { forall c . mem c up_l_cnf -> (c = Cons l Nil \/ not (mem l c)) /\ not (mem (negate l) c) } ;
     assert { forall c . mem c up_l'_cnf -> (c = Cons l' Nil \/ not (mem l' c)) /\ not (mem (negate l') c) } ;
@@ -794,7 +784,6 @@ let rec lemma prop_preserves_prop (cnf : cnf) (l : lit) (chain : chain) =
     | Cons l' chain' ->
         if mem Nil cnf then assert { mem Nil (unit_prop l cnf) } 
         else (
-            (* let up_cnf = unit_prop l cnf in *)
             if pure { l = negate l' } then (
                 assert { remove_lit (negate l) (Cons (negate l) Nil) = Nil } ;
                 assert { is_unit_chain cnf (Cons l Nil) }
@@ -1025,13 +1014,11 @@ let rec lemma prop_preserves_fixed (cnf : cnf) (l l' : lit) =
             let c = any clause ensures { mem result (unit_prop l' (unit_prop l cnf)) /\ not (mem result (unit_prop l cnf)) } in
             let cnf' = unit_prop l cnf in
             let no_neg = map (fun c -> remove_lit (negate l') c) cnf' in
-            (* let no_pos = remove_containing_lit l' no_neg in *)
             assert { not (mem c cnf) } ;
             assert { mem c no_neg } ;
             let c' = any clause ensures { c = remove_lit (negate l') result /\ mem result cnf' } in
             assert { mem (negate l') c' by c' <> c } ;
             let no_neg' = map (fun c -> remove_lit (negate l) c) cnf in
-            (* let no_pos' = remove_containing_lit l no_neg' in *)
             assert { mem c' no_neg' } ;
             let c'' = any clause ensures { c' = remove_lit (negate l) result /\ mem result cnf } in
             assert { mem (negate l') c'' } ;
@@ -1082,8 +1069,6 @@ let rec do_bcp (cnf : cnf) (prop : list lit) (ghost poss_lits : Fset.fset lit) :
         if pure { not conflict /\ props_to_conflict cnf } then (
             let ghost chain' = any chain ensures { is_unit_chain cnf result /\ 
                                                    mem Nil (bcp cnf result) } in
-            (* let ghost chain'' = any chain ensures { is_unit_chain (unit_prop l cnf) result /\ 
-                                                    not (mem Nil (bcp (unit_prop l cnf) result)) } in *)
             match chain' with
             | Nil -> assert { mem Nil (bcp (unit_prop l cnf) Nil) by mem Nil (unit_prop l cnf) } ; absurd
             | Cons l' ls' -> 
