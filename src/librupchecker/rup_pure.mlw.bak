@@ -82,40 +82,44 @@ function cnf_lits (cnf : cnf) : Fset.fset lit =
     | Cons c cs -> Fset.union (clause_lits c) (cnf_lits cs)
     end
 
+function remove_redundant (c : clause) : clause =
+	(* ensures { not (clause_redundant result) }
+	ensures { forall l . mem l c <-> mem l result }
+	ensures { forall rho . clause_sat_with rho c <-> clause_sat_with rho result } *)
+	match c with
+	| Nil -> Nil
+	| Cons l ls -> 
+		if mem l ls then remove_redundant ls
+		else Cons l (remove_redundant ls)
+	end
+
+let rec lemma rr_mem (c : clause) (l : lit) =
+	ensures { not (clause_redundant (remove_redundant c)) }
+	ensures { mem l c <-> mem l (remove_redundant c) }
+	variant { c }
+	match c with
+	| Nil -> ()
+	| Cons l' ls ->
+		rr_mem ls l ;
+		if mem l ls then assert { mem l' (remove_redundant ls) } 
+		else assert { mem l' (remove_redundant ls) }
+	end
+
+let rec lemma rr_equiv (c : clause) (rho : valuation) =
+	ensures { clause_sat_with rho c <-> clause_sat_with rho (remove_redundant c) }
+	variant { c }
+	match c with
+	| Nil -> ()
+	| Cons _ cs -> rr_equiv cs rho
+	end
+
+
 let rec lemma cnf_lits_mem (cnf : cnf) (l : lit) =
     ensures { Fset.mem l (cnf_lits cnf) <-> exists c . mem c cnf /\ mem l c }
     variant { cnf }
     match cnf with
     | Nil -> ()
     | Cons _ cs -> cnf_lits_mem cs l
-    end
-
-let rec function remove_redundant_lits (c : clause) : clause =
-    ensures { not (clause_redundant result) }
-    ensures { forall l . mem l c <-> mem l result }
-    ensures { forall rho . clause_sat_with rho c <-> clause_sat_with rho result }
-    ensures { not (clause_redundant c) -> result = c}
-    (* variant { c } *)
-    let predicate (==) (x y : bool) : bool =
-        (x && y) || (not x && not y)
-    in
-    let predicate lit_eq (l1 l2 : lit) =
-        ensures { result <-> l1.var = l2.var && l1.sign = l2.sign }
-        l1.var = l2.var && l1.sign == l2.sign
-    in
-    let rec function do_mem (x : lit) (xs : list lit) (eq : lit -> lit -> bool) : bool =
-        requires { forall y . eq x y <-> x = y }
-        ensures { result = mem x xs }
-        match xs with
-        | Nil -> false
-        | Cons y ys -> (eq x y) || do_mem x ys eq
-        end	
-    in
-    match c with
-    | Nil -> Nil
-    | Cons l ls -> 
-        if do_mem l ls lit_eq then remove_redundant_lits ls
-        else Cons l (remove_redundant_lits ls)
     end
 
 lemma empty_clause_unsat : forall rho .
@@ -488,10 +492,10 @@ let rec lemma negated_all_units (c c' : clause) =
     variant { c }
     match c with
     | Nil -> absurd
-    | Cons l Nil -> assert { c' = Cons (negate l) Nil } ;
-    | Cons l ls -> 
+    | Cons _ _ -> () 
+    | Cons _ ls -> 
         if mem c' (negate_clause ls) then negated_all_units ls c'
-        else assert { c' = Cons (negate l) Nil } ;
+        else ()
     end
 
 let rec lemma negated_contents (c : clause) =
@@ -906,22 +910,22 @@ predicate implied (cnf : cnf) (c : clause) =
     forall rho . cnf_sat_with rho cnf -> clause_sat_with rho c
 
 predicate equisat (cnf cnf' : cnf) =
-    (exists rho . cnf_sat_with rho cnf) <-> (exists rho . cnf_sat_with rho cnf')
+	(exists rho . cnf_sat_with rho cnf) <-> (exists rho . cnf_sat_with rho cnf')
 
 let lemma implied_implies_equisat (cnf : cnf) (c : clause) =
-    requires { implied cnf c }
-    ensures { equisat cnf (Cons c cnf) }
-    if pure { (exists rho . cnf_sat_with rho cnf) /\ not (exists rho . cnf_sat_with rho (Cons c cnf)) } then (
-        let rho = any valuation ensures { cnf_sat_with result cnf } in
-        assert { clause_sat_with rho c by implied cnf c } ;
-        assert { cnf_sat_with rho (Cons c cnf) } ;
-        absurd
-    ) ;
-    if pure { not (exists rho . cnf_sat_with rho cnf) /\ (exists rho . cnf_sat_with rho (Cons c cnf)) } then (
-        let rho = any valuation ensures { cnf_sat_with result (Cons c cnf) } in
-        assert { cnf_sat_with rho cnf } ;
-        absurd
-    )
+	requires { implied cnf c }
+	ensures { equisat cnf (Cons c cnf) }
+	if pure { (exists rho . cnf_sat_with rho cnf) /\ not (exists rho . cnf_sat_with rho (Cons c cnf)) } then (
+		let rho = any valuation ensures { cnf_sat_with result cnf } in
+		assert { clause_sat_with rho c by implied cnf c } ;
+		assert { cnf_sat_with rho (Cons c cnf) } ;
+		absurd
+	) ;
+	if pure { not (exists rho . cnf_sat_with rho cnf) /\ (exists rho . cnf_sat_with rho (Cons c cnf)) } then (
+		let rho = any valuation ensures { cnf_sat_with result (Cons c cnf) } in
+		assert { cnf_sat_with rho cnf } ;
+		absurd
+	)
 
 let rec lemma implied_clause (cnf : cnf) (c : clause) =
     requires { no_redundant_clauses cnf }
@@ -953,160 +957,156 @@ lemma rup_implied : forall cnf c .
     no_redundant_clauses cnf /\ not (clause_redundant c) /\ rup cnf c -> implied cnf c
 
 function resolve (c c' : clause) (l : lit) : clause =
-    if mem l c && mem (negate l) c' then
-        remove_redundant_lits ((remove_lit l c) ++ (remove_lit (negate l) c'))
-    else remove_redundant_lits (c ++ c')
-
-lemma resolve_not_redundant : forall c c' l .
-    not (clause_redundant (resolve c c' l))
+	if mem l c && mem (negate l) c' then
+		(remove_lit l c) ++ (remove_lit (negate l) c')
+	else c ++ c'
 
 let lemma resolve_implied (cnf : cnf) (c c' : clause) (l : lit) =
-    requires { no_redundant_clauses cnf }
-    requires { not (clause_redundant c) /\ not (clause_redundant c') }
-    requires { mem c cnf /\ mem c' cnf }
-    requires { mem l c /\ mem (negate l) c' }
-    ensures { implied cnf (resolve c c' l) }
-    let cnf' = Cons (resolve c c' l) cnf in
-    if pure { exists rho . cnf_sat_with rho cnf /\ not (cnf_sat_with rho cnf') } then
-        let rho = any valuation ensures { cnf_sat_with result cnf /\ not (cnf_sat_with result cnf') } in
-        assert { not (clause_sat_with rho (resolve c c' l)) } ;
-        let l' = any lit ensures { mem result c /\ Map.get rho result.var = result.sign } in
-        if pure { l = l' } then (
-            let l'' = any lit ensures { mem result c' /\ Map.get rho result.var = result.sign } in
-            assert { mem l'' (resolve c c' l) by l'' <> negate l } ;
-            absurd
-        ) else absurd
+	requires { no_redundant_clauses cnf }
+	requires { not (clause_redundant c) /\ not (clause_redundant c') }
+	requires { mem c cnf /\ mem c' cnf }
+	requires { mem l c /\ mem (negate l) c' }
+	ensures { implied cnf (resolve c c' l) }
+	let cnf' = Cons (resolve c c' l) cnf in
+	if pure { exists rho . cnf_sat_with rho cnf /\ not (cnf_sat_with rho cnf') } then
+		let rho = any valuation ensures { cnf_sat_with result cnf /\ not (cnf_sat_with result cnf') } in
+		assert { not (clause_sat_with rho (resolve c c' l)) } ;
+		let l' = any lit ensures { mem result c /\ Map.get rho result.var = result.sign } in
+		if pure { l = l' } then (
+			let l'' = any lit ensures { mem result c' /\ Map.get rho result.var = result.sign } in
+			assert { mem l'' (resolve c c' l) by l'' <> negate l } ;
+			absurd
+		) else absurd
 
 function pivot_clauses (cnf : cnf) (l : lit) : list clause =
-    match cnf with
-    | Nil -> Nil
-    | Cons c cs -> if mem (negate l) c then Cons c (pivot_clauses cs l) else pivot_clauses cs l
-    end
+	match cnf with
+	| Nil -> Nil
+	| Cons c cs -> if mem (negate l) c then Cons c (pivot_clauses cs l) else pivot_clauses cs l
+	end
 
 let rec lemma pivot_sub (cnf :  cnf) (c : clause) (l : lit) =
-    requires { no_redundant_clauses cnf }
-    requires { mem c (pivot_clauses cnf l) }
-    ensures { mem c cnf }
-    variant { cnf }
-    match cnf with
-    | Nil -> absurd
-    | Cons c' cs -> 
-        if pure { c = c' } then 
-            assert { mem c' (pivot_clauses cnf l)}
-        else pivot_sub cs c l
-    end
+	requires { no_redundant_clauses cnf }
+	requires { mem c (pivot_clauses cnf l) }
+	ensures { mem c cnf }
+	variant { cnf }
+	match cnf with
+	| Nil -> absurd
+	| Cons c' cs -> 
+		if pure { c = c' } then 
+			assert { mem c' (pivot_clauses cnf l)}
+		else pivot_sub cs c l
+	end
 
 let rec lemma pivot_mem (cnf : cnf) (c : clause) (l : lit) =
-    requires { no_redundant_clauses cnf }
-    requires { not (clause_redundant c) }
-    requires { mem c (pivot_clauses cnf l) }
-    ensures { mem c cnf /\ mem (negate l) c }
-    variant { cnf }
-    match cnf with
-    | Nil -> absurd
-    | Cons c' cs -> 
-        if pure { c = c' } then 
-            if pure { mem (negate l) c' } then
-                assert { mem c' (pivot_clauses cnf l)}
-            else
-                pivot_mem cs c l
-        else pivot_mem cs c l
-    end
+	requires { no_redundant_clauses cnf }
+	requires { not (clause_redundant c) }
+	requires { mem c (pivot_clauses cnf l) }
+	ensures { mem c cnf /\ mem (negate l) c }
+	variant { cnf }
+	match cnf with
+	| Nil -> absurd
+	| Cons c' cs -> 
+		if pure { c = c' } then 
+			if pure { mem (negate l) c' } then
+				assert { mem c' (pivot_clauses cnf l)}
+			else
+				pivot_mem cs c l
+		else pivot_mem cs c l
+	end
 
 let rec lemma pivot_nil (cnf : cnf) (l : lit) (rho : valuation) =
-    requires { no_redundant_clauses cnf }
-    requires { pivot_clauses cnf l = Nil }
-    requires { cnf_sat_with rho cnf }
-    ensures { cnf_sat_with (Map.set rho l.var l.sign) cnf }
-    variant { cnf }
-    match cnf with
-    | Nil -> ()
-    | Cons c cs ->
-        assert { not (mem (negate l) c) by pivot_clauses cnf l = Nil } ;
-        assert { clause_sat_with (Map.set rho l.var l.sign) c } ;
-        pivot_nil cs l rho
-    end
+	requires { no_redundant_clauses cnf }
+	requires { pivot_clauses cnf l = Nil }
+	requires { cnf_sat_with rho cnf }
+	ensures { cnf_sat_with (Map.set rho l.var l.sign) cnf }
+	variant { cnf }
+	match cnf with
+	| Nil -> ()
+	| Cons c cs ->
+		assert { not (mem (negate l) c) by pivot_clauses cnf l = Nil } ;
+		assert { clause_sat_with (Map.set rho l.var l.sign) c } ;
+		pivot_nil cs l rho
+	end
 
 let rec lemma pivot_complete (cnf : cnf) (l : lit) (c : clause) =
-    requires { no_redundant_clauses cnf }
-    requires { mem c cnf /\ mem (negate l) c }
-    ensures { mem c (pivot_clauses cnf l) }
-    variant { cnf }
-    match cnf with
-    | Nil -> absurd
-    | Cons c' cs -> 
-        if pure { c = c' } then 
-            assert { mem c' (pivot_clauses cnf l)}
-        else pivot_complete cs l c
-    end
+	requires { no_redundant_clauses cnf }
+	requires { mem c cnf /\ mem (negate l) c }
+	ensures { mem c (pivot_clauses cnf l) }
+	variant { cnf }
+	match cnf with
+	| Nil -> absurd
+	| Cons c' cs -> 
+		if pure { c = c' } then 
+			assert { mem c' (pivot_clauses cnf l)}
+		else pivot_complete cs l c
+	end
 
 predicate rat (cnf : cnf) (c : clause) =
-    match c with
-    | Nil -> false
-    | Cons l _ -> forall c' . mem c' (pivot_clauses cnf l) -> rup cnf (resolve c c' l)
-    end
+	match c with
+	| Nil -> false
+	| Cons l _ -> forall c' . mem c' (pivot_clauses cnf l) -> rup cnf (resolve c c' l)
+	end
 
 let lemma rat_equisat (cnf : cnf) (c : clause) =
-    requires { no_redundant_clauses cnf }
-    requires { not (clause_redundant c) }
-    requires { rat cnf c }
-    ensures { equisat cnf (Cons c cnf) }
-    match c with
-    | Nil -> absurd
-    | Cons l ls ->
-        if pure { (exists rho . cnf_sat_with rho cnf) /\ not (exists rho . (cnf_sat_with rho (Cons c cnf))) } then (
-            let rho = any valuation ensures { cnf_sat_with result cnf } in
-            assert { not (clause_sat_with rho c) by cnf_sat_with rho cnf /\ not (cnf_sat_with rho (Cons c cnf)) } ;
-            assert { Map.get rho l.var = not l.sign } ;
-            let rho' = Map.set rho l.var l.sign in
-            if pure { exists c' . mem c' cnf /\ not (clause_sat_with rho' c') } then (
-                let c' = any clause ensures { mem result cnf /\ not (clause_sat_with rho' result) } in
-                if not (mem (negate l) c' ) then (
-                    let l' = any lit ensures { mem result c' /\ Map.get rho result.var = result.sign } in
-                    assert { Map.get rho' l'.var = Map.get rho l'.var } ;
-                    absurd ;
-                ) ;
-                assert { mem c' (pivot_clauses cnf l) } ;
-                match ls with
-                | Nil ->
-                    assert { remove_lit (negate l) c' = remove_redundant_lits (remove_lit (negate l) c') } ;
-                    assert { rup cnf (remove_lit (negate l) c') by remove_lit l c = Nil } ;
-                    assert { clause_sat_with rho' (remove_lit (negate l) c') 
-                             by not (mem (negate l) (remove_lit (negate l) c')) 
-                                 /\ clause_sat_with rho (remove_lit (negate l) c') } ;
-                    absurd
-                | Cons _ _ ->
-                    assert { rup cnf (resolve c c' l) } ;
-                    if not (clause_sat_with rho (resolve c c' l)) then (
-                        assert { not (clause_redundant (resolve c c' l)) } ;
-                        absurd
-                    ) ;
-                    assert { clause_sat_with rho' (resolve c c' l) 
-                             by (not (mem (negate l) (resolve c c' l)) 
-                                 /\ clause_sat_with rho (resolve c c' l)) } ;
-                    let l'' = any lit ensures { mem result (resolve c c' l) /\ Map.get rho' result.var = result.sign } in
-                    assert { mem l'' (resolve c c' l) } ;
-                    absurd
-                end ;
-            ) ;
-            assert { forall c' . mem c' cnf -> clause_sat_with rho' c' } ;
-            assert { clause_sat_with rho' c } ;
-            assert { cnf_sat_with rho' (Cons c cnf) } ;
-            absurd
-        )
-    end
+	requires { no_redundant_clauses cnf }
+	requires { not (clause_redundant c) }
+	requires { rat cnf c }
+	ensures { equisat cnf (Cons c cnf) }
+	match c with
+	| Nil -> absurd
+	| Cons l ls ->
+		if pure { (exists rho . cnf_sat_with rho cnf) /\ not (exists rho . (cnf_sat_with rho (Cons c cnf))) } then (
+			let rho = any valuation ensures { cnf_sat_with result cnf } in
+			assert { not (clause_sat_with rho c) by cnf_sat_with rho cnf /\ not (cnf_sat_with rho (Cons c cnf)) } ;
+			assert { Map.get rho l.var = not l.sign } ;
+			let rho' = Map.set rho l.var l.sign in
+			if pure { exists c' . mem c' cnf /\ not (clause_sat_with rho' c') } then (
+				let c' = any clause ensures { mem result cnf /\ not (clause_sat_with rho' result) } in
+				if not (mem (negate l) c' ) then (
+					let l' = any lit ensures { mem result c' /\ Map.get rho result.var = result.sign } in
+					assert { Map.get rho' l'.var = Map.get rho l'.var } ;
+					absurd ;
+				) ;
+				assert { mem c' (pivot_clauses cnf l) } ;
+				match ls with
+				| Nil ->
+					assert { rup cnf (remove_lit (negate l) c') by remove_lit l c = Nil } ;
+					assert { clause_sat_with rho' (remove_lit (negate l) c') 
+							 by not (mem (negate l) (remove_lit (negate l) c')) 
+						 		/\ clause_sat_with rho (remove_lit (negate l) c') } ;
+					absurd
+				| Cons l' ls' ->
+					assert { rup cnf (resolve c c' l) } ;
+					if not (clause_sat_with rho (resolve c c' l)) then (
+						(* assert { Map.get rho l.var = not l.sign } ; *)
+						assert { not (clause_redundant (resolve c c' l)) } ;
+						absurd
+					) ;
+					assert { clause_sat_with rho' (resolve c c' l) 
+							 by not (mem (negate l) (resolve c c' l)) 
+						 		/\ clause_sat_with rho (resolve c c' l) } ;
+					absurd
+				end ;
+				absurd
+			) ;
+			assert { forall c' . mem c' cnf -> clause_sat_with rho' c' } ;
+			assert { clause_sat_with rho' c } ;
+			assert { cnf_sat_with rho' (Cons c cnf) } ;
+			absurd
+		)
+	end
 
 predicate valid_proof (cnf : cnf) (pf : proof) =
     match pf with
     | Nil -> props_to_conflict cnf
-    | Cons c cs -> (rup cnf c \/ rat cnf c) /\ valid_proof (Cons c cnf) cs
+    | Cons c cs -> rup cnf c /\ valid_proof (Cons c cnf) cs
     end
 
 predicate valid_derivation (cnf : cnf) (pf : proof) =
-    match pf with
-    | Nil -> true
-    | Cons c cs -> (rup cnf c \/ rat cnf c) /\ valid_derivation (Cons c cnf) cs
-    end
+	match pf with
+	| Nil -> true
+	| Cons c cs -> implied cnf c /\ valid_derivation (Cons c cnf) cs
+	end
 
 let rec lemma valid_proof_means_unsat (cnf : cnf) (pf : proof) =
     requires { no_redundant_clauses cnf }
@@ -1155,7 +1155,7 @@ let rec function do_remove_containing_lit (l : lit) (cnf : cnf) : cnf =
 
 let rec function check_unit (l : lit) (cnf : cnf) : bool =
     ensures { result = is_unit l cnf }
-    variant { cnf }
+	variant { cnf }
     match cnf with
     | Nil -> false
     | Cons c cs -> 
@@ -1165,6 +1165,7 @@ let rec function check_unit (l : lit) (cnf : cnf) : bool =
         | Cons _ _ -> check_unit l cs
         end
     end
+
 
 let rec function do_remove_lit (l : lit) (c : clause) : clause =
     requires { not (clause_redundant c) }
@@ -1239,7 +1240,7 @@ let rec do_bcp (cnf : cnf) (prop : list lit) (ghost poss_lits : Fset.fset lit) :
     | None ->
         let ghost b = mem Nil cnf in
         if pure { forall l . not (is_unit l cnf) } then
-            assert { forall chain . is_unit_chain cnf chain -> chain = Nil } 
+			assert { forall chain . is_unit_chain cnf chain -> chain = Nil } 
         else (
             assert { forall l . is_unit l cnf -> mem l prop } ;
             assert { forall l . is_unit l cnf -> forall c . mem c (unit_prop l cnf) <-> mem c cnf } ;
@@ -1266,8 +1267,6 @@ let rec do_bcp (cnf : cnf) (prop : list lit) (ghost poss_lits : Fset.fset lit) :
         if pure { not conflict /\ props_to_conflict cnf } then (
             let ghost chain' = any chain ensures { is_unit_chain cnf result /\ 
                                                    mem Nil (bcp cnf result) } in
-            (* let ghost chain'' = any chain ensures { is_unit_chain (unit_prop l cnf) result /\ 
-                                                    not (mem Nil (bcp (unit_prop l cnf) result)) } in *)
             match chain' with
             | Nil -> assert { mem Nil (bcp (unit_prop l cnf) Nil) by mem Nil (unit_prop l cnf) } ; absurd
             | Cons l' ls' -> 
@@ -1294,44 +1293,6 @@ let check_rup (cnf : cnf) (c : clause) : bool =
     let _, _, conflict = do_bcp (cnf ++ (negate_clause c)) Nil (cnf_lits (cnf ++ (negate_clause c))) in
     conflict
 
-let check_rat (cnf : cnf) (c : clause) =
-    requires { no_redundant_clauses cnf }
-    requires { not (clause_redundant c) }
-    ensures { result <-> rat cnf c }
-    let rec get_pivots (l : lit) (cnf : cnf) : list clause =
-        ensures { forall c . mem c result <-> mem c (pivot_clauses cnf l) }
-        variant { cnf }
-        match cnf with
-        | Nil -> Nil
-        | Cons c cs -> 
-            if do_mem (negate l) c lit_eq 
-            then Cons c (get_pivots l cs) 
-            else get_pivots l cs
-        end
-    in
-    let do_resolve (c c' : clause) (l : lit) : clause =
-        requires { not (clause_redundant c) /\ not (clause_redundant c') }
-        requires { mem l c && mem (negate l) c' }
-        ensures { result = resolve c c' l }
-        remove_redundant_lits ((do_remove_lit l c) ++ (do_remove_lit (negate l) c'))
-    in
-    let rec check_pivots (l : lit) (ps : list clause) (ghost qs : list clause) : bool =
-        requires { no_redundant_clauses ps }
-        requires { mem l c }
-        requires { forall c' . mem c' ps \/ mem c' qs <-> mem c' (pivot_clauses cnf l) }
-        requires { forall c' . mem c' qs -> rup cnf (resolve c c' l) }
-        ensures { result <-> forall c' . mem c' ps -> rup cnf (resolve c c' l) }
-        variant { ps }
-        match ps with
-        | Nil -> true
-        | Cons p ps' -> check_rup cnf (do_resolve c p l) && check_pivots l ps' (Cons p qs)
-        end
-    in
-    match c with
-    | Nil -> false
-    | Cons l _ -> check_pivots l (get_pivots l cnf) Nil
-    end
-
 let rec check_proof (cnf : cnf) (pf : proof) : bool =
     requires { no_redundant_clauses cnf }
     requires { no_redundant_clauses pf }
@@ -1339,23 +1300,35 @@ let rec check_proof (cnf : cnf) (pf : proof) : bool =
     variant { pf }
     match pf with
     | Nil -> let _, _, conflict = do_bcp cnf Nil (cnf_lits cnf) in conflict
-    | Cons c cs -> (check_rup cnf c || check_rat cnf c) && check_proof (Cons c cnf) cs
+    | Cons c cs -> check_rup cnf c && check_proof (Cons c cnf) cs
     end
 
 let rec check_derivation (cnf : cnf) (pf : proof) : bool =
-    requires { no_redundant_clauses cnf }
-    requires { no_redundant_clauses pf }
-    ensures { result <-> valid_derivation cnf pf }
-    variant { pf }
-    match pf with
-    | Nil -> true
-    | Cons c cs -> (check_rup cnf c || check_rat cnf c) && check_derivation (Cons c cnf) cs
-    end
+	requires { no_redundant_clauses cnf }
+	requires { no_redundant_clauses pf }
+	ensures { result -> valid_derivation cnf pf }
+	variant { pf }
+	match pf with
+	| Nil -> true
+	| Cons c cs -> check_rup cnf c && check_derivation (Cons c cnf) cs
+	end
 
 let rec remove_redundant_clauses (cnf : cnf) : cnf =
     ensures { no_redundant_clauses result }
     ensures { forall rho . cnf_sat_with rho cnf <-> cnf_sat_with rho result }
     variant { cnf }
+    let rec remove_redundant_lits (c : clause) : clause =
+        ensures { not (clause_redundant result) }
+        ensures { forall l . mem l c <-> mem l result }
+        ensures { forall rho . clause_sat_with rho c <-> clause_sat_with rho result }
+        variant { c }
+        match c with
+        | Nil -> Nil
+        | Cons l ls -> 
+            if do_mem l ls lit_eq then remove_redundant_lits ls
+            else Cons l (remove_redundant_lits ls)
+        end
+    in
     match cnf with
     | Nil -> Nil
     | Cons c cs -> 

@@ -183,3 +183,4 @@ dmypy.json
 cython_debug/
 
 .pypi
+*.bak

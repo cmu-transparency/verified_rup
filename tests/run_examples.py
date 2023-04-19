@@ -3,7 +3,7 @@ import unittest
 import glob
 import drup
 
-class ExampleTestCase(unittest.TestCase):
+class ProofExampleTestCase(unittest.TestCase):
     
     def __init__(self, dimacs, proof):
         super().__init__()
@@ -12,7 +12,7 @@ class ExampleTestCase(unittest.TestCase):
     
     def test_from_file(self):
         print(f"Checking {self.dimacs} and {self.proof} from file...")
-        self.assertEqual(drup.check_from_files(self.dimacs, self.proof), 0)
+        self.assertEqual(drup.check_proof_from_files(self.dimacs, self.proof), 0)
 
     def test_from_string(self):
         print(f"Checking {self.dimacs} and {self.proof} from string...")
@@ -20,7 +20,7 @@ class ExampleTestCase(unittest.TestCase):
             dimacs = f.read()
         with open(self.proof, 'r') as f:
             proof = f.read()
-        self.assertEqual(drup.check_from_strings(dimacs, proof), 0)
+        self.assertEqual(drup.check_proof_from_strings(dimacs, proof), 0)
 
     def test_corrupt_proof(self):
         print(f"Checking {self.dimacs} and {self.proof} with corrupted drup...")
@@ -30,19 +30,20 @@ class ExampleTestCase(unittest.TestCase):
             proof = f.read()
         proof_lines = proof.splitlines()
         proof = '\n'.join(proof_lines[len(proof_lines)//2:])
-        self.assertEqual(drup.check_from_strings(dimacs, proof), -1)
+        self.assertEqual(drup.check_proof_from_strings(dimacs, proof), -1)
 
-    def test_from_file(self):
+    def test_from_corrupted_file(self):
         print(f"Checking {self.dimacs} and {self.proof} with corrupted path...")
         with self.assertRaises(ValueError):
-            drup.check_from_files(self.dimacs + '.bogus', self.proof)
+            drup.check_proof_from_files(self.dimacs + '.bogus', self.proof)
         with self.assertRaises(ValueError):
-            drup.check_from_files(self.dimacs, self.proof + '.bogus')
+            drup.check_proof_from_files(self.dimacs, self.proof + '.bogus')
     
     def runTest(self):
         self.test_from_file()
         self.test_from_string()
         self.test_corrupt_proof()
+        self.test_from_corrupted_file()
 
 def suite():
     suite = unittest.TestSuite()
@@ -54,7 +55,7 @@ def suite():
         if not os.path.exists(f'{dir}/{test}.drup'):
             continue
         proof = f'{dir}/{test}.drup'
-        suite.addTest(ExampleTestCase
+        suite.addTest(ProofExampleTestCase
     (dimacs, proof))
     
     return suite
