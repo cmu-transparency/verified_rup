@@ -66,10 +66,10 @@ $(PYTHON_PATH)/site-packages/rup/librupchecker.{so|dll}
 ```
 The C library exposes wrappers around the core checker, which you can declare external in your C code as follows:
 ```C
-int check_derivation_from_strings(const char *dimacs, const char *cs)
+int check_derivation_from_strings(const char *dimacs, const char *cs);
 int check_from_file(const char *dimacs_path, const char *drup_path);
 int check_from_strings(const char *dimacs, const char *drup);
-int check_step_from_strings(const char *dimacs, const char *c)
+int check_step_from_strings(const char *dimacs, const char *c);
 ```
 Before any of these can be called, the library must be initialized with a call to `do_startup` passing the current `argv`, which calls `caml_startup`:
 ```C
