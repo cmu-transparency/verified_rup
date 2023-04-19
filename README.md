@@ -6,7 +6,6 @@ The core of the checker is written in [Why3](https://why3.lri.fr/), which is ext
 * The checker also supports RAT clauses, so DRAT proofs are also accepted.
 * The current implementation is not optimized, and will be considerably slower than [DRAT-trim](https://github.com/marijnheule/drat-trim) on large proofs (see [performance](#performance) below).
 * Accordingly, the frontend does not accept proofs in binary format.
-* There is currently no CLI, but one can be written as needed in a few minutes using the API described below.
 
 The verification can be checked by running `src/librupchecker/rup_pure.mlw` in Why3. 
 Most of the verification conditions complete with the `Auto level 0` tactic, and the rest either with a few levels of splitting followed by `Auto 0` or `Auto 1`, or simply with `Auto 2`.
@@ -40,20 +39,45 @@ $ pip install dist/*.whl
 
 ## Usage
 
+### Command line interface
+
+The package provides a command line interface for checking proofs stored in files:
+```bash
+$ drup --help
+
+usage: drup [-h] dimacs drup
+
+Checks DRUP & DRAT proofs against DIMACS source. 
+Returns 0 if the proof is valid, -1 if not, or a negative error code if the input is invalid.
+
+positional arguments:
+  dimacs      Path to a DIMACS CNF formula
+  drup        Path to a DRUP/DRAT proof
+
+options:
+  -h, --help  show this help message and exit
+```
+
+### As a C library
+
 If you do not intend to use the Python bindings, then you will find the C shared object in the Python package directory:
 ```bash
 $(PYTHON_PATH)/site-packages/rup/librupchecker.{so|dll}
 ```
-The C library exposes two wrappers around the core checker:
+The C library exposes wrappers around the core checker, which you can declare external in your C code as follows:
 ```C
+int check_derivation_from_strings(const char *dimacs, const char *cs)
 int check_from_file(const char *dimacs_path, const char *drup_path);
 int check_from_strings(const char *dimacs, const char *drup);
+int check_step_from_strings(const char *dimacs, const char *c)
 ```
-Before either of these can be called, the library must be initialized with a call to `do_startup` passing the current `argv`, which calls `caml_startup`:
+Before any of these can be called, the library must be initialized with a call to `do_startup` passing the current `argv`, which calls `caml_startup`:
 ```C
 int do_startup(char **argv);
 ```
 Either function returns `0` if the proof is valid, and `-1` otherwise.
+
+### As a Python module
 
 The Python bindings expose these same functions, but will call `do_startup` automatically when the package is imported, so there is no need to call it manually.
 If the arguments given to the Python bindings cannot be opened (in the case of files) or parsed, then they raise `ValueError`.

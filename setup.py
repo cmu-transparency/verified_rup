@@ -34,5 +34,8 @@ setup(
     cmdclass={'sdist': SDist},
     packages=['drup'],
     package_dir={'drup': 'src/drup'},
-    ext_modules=[Extension(name="drup.librupchecker", sources=[])]
+    ext_modules=[Extension(name="drup.librupchecker", sources=[])],
+	entry_points = {
+        'console_scripts': ['drup=drup.cli:main'],
+    }
 )
