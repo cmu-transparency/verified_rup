@@ -18,7 +18,7 @@ let check_from_data cnf pf =
       in aux cnf c
     with _ -> -6
 
-let check_from_file cnf_file pf_file = 
+let check_proof_from_file cnf_file pf_file = 
   let cnf = try Some (Dimacs.parse_cnf cnf_file) with _ -> None in
   let pf = try Some (Dimacs.parse_drup pf_file) with _ -> None in
   match cnf, pf with
@@ -26,7 +26,7 @@ let check_from_file cnf_file pf_file =
   | _, None -> -3
   | Some cnf, Some pf -> check_from_data cnf pf
 
-let check_from_strings cnf pf =
+let check_proof_from_strings cnf pf =
   let cnf = try Some (Dimacs.list_from_string cnf [] 0 |> Dimacs.parse_cnf_file) with _ -> None in
   let pf = try Some (Dimacs.list_from_string pf [] 0 |> Dimacs.parse_drup_file) with _ -> None in
   match cnf, pf with
@@ -55,7 +55,7 @@ let check_derivation_from_strings cnf steps =
       | c :: steps -> if (check_step_from_data cnf (c :: [])) == 0 then aux (c :: cnf) steps else -1
     in aux cnf steps
 
-let _ = Callback.register "check_from_file" check_from_file
-let _ = Callback.register "check_from_strings" check_from_strings
+let _ = Callback.register "check_proof_from_file" check_proof_from_file
+let _ = Callback.register "check_proof_from_strings" check_proof_from_strings
 let _ = Callback.register "check_step_from_strings" check_step_from_strings
 let _ = Callback.register "check_derivation_from_strings" check_derivation_from_strings

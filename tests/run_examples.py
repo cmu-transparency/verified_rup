@@ -12,7 +12,7 @@ class ProofExampleTestCase(unittest.TestCase):
     
     def test_from_file(self):
         print(f"Checking {self.dimacs} and {self.proof} from file...")
-        self.assertEqual(drup.check_proof_from_files(self.dimacs, self.proof), 0)
+        self.assertEqual(drup.check_proof_from_files(self.dimacs, self.proof), True)
 
     def test_from_string(self):
         print(f"Checking {self.dimacs} and {self.proof} from string...")
@@ -20,7 +20,7 @@ class ProofExampleTestCase(unittest.TestCase):
             dimacs = f.read()
         with open(self.proof, 'r') as f:
             proof = f.read()
-        self.assertEqual(drup.check_proof_from_strings(dimacs, proof), 0)
+        self.assertEqual(drup.check_proof_from_strings(dimacs, proof), True)
 
     def test_corrupt_proof(self):
         print(f"Checking {self.dimacs} and {self.proof} with corrupted drup...")
@@ -30,7 +30,7 @@ class ProofExampleTestCase(unittest.TestCase):
             proof = f.read()
         proof_lines = proof.splitlines()
         proof = '\n'.join(proof_lines[len(proof_lines)//2:])
-        self.assertEqual(drup.check_proof_from_strings(dimacs, proof), -1)
+        self.assertEqual(drup.check_proof_from_strings(dimacs, proof), False)
 
     def test_from_corrupted_file(self):
         print(f"Checking {self.dimacs} and {self.proof} with corrupted path...")
