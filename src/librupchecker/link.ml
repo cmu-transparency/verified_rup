@@ -1,0 +1,1 @@
+include Bindings.Stubs(Drup_bindings)

@@ -41,6 +41,9 @@ predicate cnf_sat_with (rho : valuation) (cnf : cnf) =
 predicate clause_trivial (c : clause) =
     exists l . mem l c /\ mem (negate l) c
 
+predicate no_trivial_clauses (cnf : cnf) =
+    forall c . mem c cnf -> not (clause_trivial c)
+
 predicate clause_redundant (c : clause) =
     match c with
     | Nil -> false
@@ -95,7 +98,6 @@ let rec function remove_redundant_lits (c : clause) : clause =
     ensures { forall l . mem l c <-> mem l result }
     ensures { forall rho . clause_sat_with rho c <-> clause_sat_with rho result }
     ensures { not (clause_redundant c) -> result = c}
-    (* variant { c } *)
     let predicate (==) (x y : bool) : bool =
         (x && y) || (not x && not y)
     in
@@ -299,8 +301,29 @@ let lemma unit_prop_no_redundant (l : lit) (cnf : cnf) =
         absurd
     )
 
+let lemma unit_prop_no_trivial (l : lit) (cnf : cnf) =
+    requires { no_redundant_clauses cnf /\ no_trivial_clauses cnf }
+    ensures { no_trivial_clauses (unit_prop l cnf) }
+    let no_neg = map (fun c -> remove_lit (negate l) c) cnf in
+    let no_pos = remove_containing_lit l no_neg in
+    if pure { exists c . mem c (unit_prop l cnf) /\ clause_trivial c } then (
+        let c = any clause ensures { mem result (unit_prop l cnf) /\ clause_trivial result } in
+        let l' = any lit ensures { mem result c /\ mem (negate result) c } in
+        assert { l.var <> l'.var by l <> l' /\ l <> negate l' } ;
+        assert { mem c no_pos /\ mem c no_neg } ;
+        let c' = any clause ensures { mem result cnf /\ remove_lit (negate l) result = c } in
+        assert { clause_trivial c' by mem l' c' /\ mem (negate l') c' } ;
+        absurd
+    )
+
 lemma unit_prop_occ : forall l cnf c .
     is_unit l cnf /\ mem l c /\ mem c (unit_prop l cnf) -> c = Cons l Nil
+
+let lemma unit_prop_to_empty (l : lit) (cnf : cnf) =
+    requires { is_unit l cnf /\ is_unit (negate l) cnf }
+    ensures { mem Nil (unit_prop l cnf) }
+    let no_neg = map (fun c -> remove_lit (negate l) c) cnf in
+    assert { mem Nil no_neg } 
 
 let rec lemma unit_prop_clauses (l : lit) (cnf : cnf) (c : clause) =
     requires { no_redundant_clauses cnf }
@@ -504,6 +527,16 @@ let rec lemma negated_contents (c : clause) =
     | Cons _ ls -> negated_contents ls
     end
 
+let rec lemma negated_not_trivial (c : clause) =
+    requires { c <> Nil }
+    ensures { no_trivial_clauses (negate_clause c) }
+    variant { c }
+    match c with
+    | Nil -> absurd
+    | Cons _ Nil -> ()
+    | Cons _ ls -> negated_not_trivial ls
+    end
+
 let rec lemma negated_conflict (c : clause) =
     requires { cnf_unsat (negate_clause c) }
     ensures { exists l . is_unit l (negate_clause c) /\ is_unit (negate l) (negate_clause c) }
@@ -598,7 +631,9 @@ let lemma nil_props_conflict (cnf : cnf) (l : lit) =
     requires { mem Nil cnf }
     requires { is_unit l cnf }
     ensures { props_to_conflict (unit_prop l cnf) }
-    assert { mem Nil (unit_prop l cnf) } ;
+    let no_neg = map (fun c -> remove_lit (negate l) c) cnf in
+    assert { remove_lit (negate l) Nil = Nil } ;
+    assert { mem Nil (unit_prop l cnf) by mem Nil no_neg /\ mem Nil (remove_containing_lit l no_neg) } ;
     assert { is_unit_chain (unit_prop l cnf) Nil /\ 
              mem Nil (bcp (unit_prop l cnf) Nil) } 
 
@@ -797,6 +832,157 @@ let rec lemma unit_always_chain (cnf : cnf) (l : lit) (chain : chain) =
         )
     end
 
+let rec lemma unit_chain_mono (cnf : cnf) (chain : chain) =
+    requires { no_redundant_clauses cnf /\ no_trivial_clauses cnf }
+    requires { is_unit_chain cnf chain }
+    ensures { forall l . is_unit_chain (Cons (Cons l (Cons (negate l) Nil)) cnf) chain }
+    variant { chain }
+    if pure { exists l . not (is_unit_chain (Cons (Cons l (Cons (negate l) Nil)) cnf) chain) } then
+        let l = any lit ensures { not (is_unit_chain (Cons (Cons result (Cons (negate result) Nil)) cnf) chain) } in
+        let c = Cons l (Cons (negate l) Nil) in
+        match chain with
+        | Nil -> absurd
+        | Cons l' ls' ->
+            assert { is_unit l' (Cons c cnf) by is_unit l' cnf } ;
+            if pure { l = l' } then (
+                let no_neg = map (fun c -> remove_lit (negate l') c) cnf in
+                let no_neg' = map (fun c -> remove_lit (negate l') c) (Cons c cnf) in
+                assert { mem (Cons l Nil) no_neg' by remove_lit (negate l') c = Cons l Nil } ;
+                assert { forall c' . mem c' no_neg' <-> mem c' no_neg \/ c' = Cons l Nil } ;
+                absurd
+            ) else if pure { negate l = l' } then (
+                let no_neg = map (fun c -> remove_lit (negate l') c) cnf in
+                let no_neg' = map (fun c -> remove_lit (negate l') c) (Cons c cnf) in
+                assert { mem (Cons l Nil) no_neg' by remove_lit (negate l') c = Cons (negate l) Nil } ;
+                assert { forall c' . mem c' no_neg' <-> mem c' no_neg \/ c' = Cons (negate l) Nil } ;
+                absurd
+            ) else (
+                let no_neg' = map (fun c -> remove_lit (negate l') c) (Cons c cnf) in
+                assert { mem c no_neg' by remove_lit (negate l') c = c } ;
+                assert { forall c' . mem c' (unit_prop l' (Cons c cnf)) <-> mem c' (unit_prop l' cnf) \/ c' = c } ;
+                unit_chain_mono (unit_prop l' cnf) ls' ;
+                assert { forall c' . mem c' (Cons c (unit_prop l' cnf)) <-> mem c' (unit_prop l' cnf) \/ c' = c } ;
+                assert { not (clause_redundant c) } ;
+                unit_chain_nomatter (Cons c (unit_prop l' cnf)) (unit_prop l' (Cons c cnf)) ls' ;
+                absurd
+            )
+        end
+
+let rec lemma unit_chain_mono' (cnf : cnf) (chain : chain) (l : lit) =
+    requires { no_redundant_clauses cnf /\ no_trivial_clauses cnf }
+    requires { is_unit_chain (Cons (Cons l (Cons (negate l) Nil)) cnf) chain }
+    ensures { is_unit_chain cnf chain }
+    variant { chain }
+    if pure { not (is_unit_chain cnf chain) } then
+        let c = Cons l (Cons (negate l) Nil) in
+        match chain with
+        | Nil -> absurd
+        | Cons l' ls' ->
+            assert { is_unit l' cnf } ;
+            if pure { l = l' } then (
+                let no_neg = map (fun c -> remove_lit (negate l') c) cnf in
+                let no_neg' = map (fun c -> remove_lit (negate l') c) (Cons c cnf) in
+                assert { mem (Cons l Nil) no_neg' by remove_lit (negate l') c = Cons l Nil } ;
+                assert { forall c' . mem c' no_neg' <-> mem c' no_neg \/ c' = Cons l Nil } ;
+                absurd
+            ) else if pure { negate l = l' } then (
+                let no_neg = map (fun c -> remove_lit (negate l') c) cnf in
+                let no_neg' = map (fun c -> remove_lit (negate l') c) (Cons c cnf) in
+                assert { mem (Cons l Nil) no_neg' by remove_lit (negate l') c = Cons (negate l) Nil } ;
+                assert { forall c' . mem c' no_neg' <-> mem c' no_neg \/ c' = Cons (negate l) Nil } ;
+                absurd
+            ) else (
+                let no_neg' = map (fun c -> remove_lit (negate l') c) (Cons c cnf) in
+                assert { mem c no_neg' by remove_lit (negate l') c = c } ;
+                assert { forall c' . mem c' (unit_prop l' (Cons c cnf)) <-> mem c' (Cons c (unit_prop l' (Cons c cnf))) } ;
+                unit_chain_nomatter (unit_prop l' (Cons c cnf)) (Cons c (unit_prop l' cnf)) ls' ;
+                unit_chain_mono' (unit_prop l' cnf) ls' l ;
+                assert { forall c' . mem c' (Cons c (unit_prop l' cnf)) <-> mem c' (unit_prop l' cnf) \/ c' = c } ;
+                assert { not (clause_redundant c) } ;
+                unit_chain_nomatter (Cons c (unit_prop l' cnf)) (unit_prop l' (Cons c cnf)) ls' ;
+                absurd
+            )
+        end
+
+let rec lemma unit_prop_mono (cnf : cnf) (chain : chain) (cc : clause) =
+    requires { no_redundant_clauses cnf /\ no_trivial_clauses cnf }
+    requires { not (clause_redundant cc) }
+    requires { is_unit_chain cnf chain }
+    requires { mem cc (bcp cnf chain) }
+    ensures { forall l . mem cc (bcp (Cons (Cons l (Cons (negate l) Nil)) cnf) chain) }
+    variant { chain }
+    if pure { exists l . not (mem cc (bcp (Cons (Cons l (Cons (negate l) Nil)) cnf) chain)) } then
+        let l = any lit ensures { not (mem cc (bcp (Cons (Cons result (Cons (negate result) Nil)) cnf) chain)) } in
+        let c = Cons l (Cons (negate l) Nil) in
+        match chain with
+        | Nil -> absurd
+        | Cons l' ls' ->
+            assert { is_unit l' (Cons c cnf) by is_unit l' cnf } ;
+            if pure { l = l' } then (
+                let no_neg = map (fun c -> remove_lit (negate l') c) cnf in
+                let no_neg' = map (fun c -> remove_lit (negate l') c) (Cons c cnf) in
+                assert { mem (Cons l Nil) no_neg' by remove_lit (negate l') c = Cons l Nil } ;
+                assert { forall c' . mem c' no_neg' <-> mem c' no_neg \/ c' = Cons l Nil } ;
+                absurd
+            ) else if pure { negate l = l' } then (
+                let no_neg = map (fun c -> remove_lit (negate l') c) cnf in
+                let no_neg' = map (fun c -> remove_lit (negate l') c) (Cons c cnf) in
+                assert { mem (Cons l Nil) no_neg' by remove_lit (negate l') c = Cons (negate l) Nil } ;
+                assert { forall c' . mem c' no_neg' <-> mem c' no_neg \/ c' = Cons (negate l) Nil } ;
+                absurd
+            ) else (
+                let no_neg' = map (fun c -> remove_lit (negate l') c) (Cons c cnf) in
+                assert { mem c no_neg' by remove_lit (negate l') c = c } ;
+                assert { forall c' . mem c' (unit_prop l' (Cons c cnf)) <-> mem c' (unit_prop l' cnf) \/ c' = c } ;
+                unit_prop_mono (unit_prop l' cnf) ls' cc ;
+                assert { forall c' . mem c' (Cons c (unit_prop l' cnf)) <-> mem c' (unit_prop l' cnf) \/ c' = c } ;
+                assert { not (clause_redundant c) } ;
+                bcp_nomatter (Cons c (unit_prop l' cnf)) (unit_prop l' (Cons c cnf)) ls' ;
+                absurd
+            )
+        end
+
+let rec lemma unit_prop_mono' (cnf : cnf) (chain : chain) (cc : clause) (l : lit) =
+    requires { no_redundant_clauses cnf /\ no_trivial_clauses cnf }
+    requires { not (clause_redundant cc) }
+    requires { is_unit_chain cnf chain }
+    requires { cc <> Cons l (Cons (negate l) Nil) }
+    requires { mem cc (bcp (Cons (Cons l (Cons (negate l) Nil)) cnf) chain) }
+    ensures { mem cc (bcp cnf chain) }
+    variant { chain }
+    if pure { not (mem cc (bcp cnf chain)) } then
+        let c = Cons l (Cons (negate l) Nil) in
+        match chain with
+        | Nil -> absurd
+        | Cons l' ls' ->
+            assert { is_unit l' (Cons c cnf) by is_unit l' cnf } ;
+            if pure { l = l' } then (
+                let no_neg = map (fun c -> remove_lit (negate l') c) cnf in
+                let no_neg' = map (fun c -> remove_lit (negate l') c) (Cons c cnf) in
+                assert { mem (Cons l Nil) no_neg' by remove_lit (negate l') c = Cons l Nil } ;
+                assert { forall c' . mem c' no_neg' <-> mem c' no_neg \/ c' = Cons l Nil } ;
+                absurd
+            ) else if pure { negate l = l' } then (
+                let no_neg = map (fun c -> remove_lit (negate l') c) cnf in
+                let no_neg' = map (fun c -> remove_lit (negate l') c) (Cons c cnf) in
+                assert { mem (Cons l Nil) no_neg' by remove_lit (negate l') c = Cons (negate l) Nil } ;
+                assert { forall c' . mem c' no_neg' <-> mem c' no_neg \/ c' = Cons (negate l) Nil } ;
+                absurd
+            ) else (
+                let no_neg' = map (fun c -> remove_lit (negate l') c) (Cons c cnf) in
+                assert { mem c no_neg' by remove_lit (negate l') c = c } ;
+                assert { forall c' . mem c' (unit_prop l' (Cons c cnf)) <-> mem c' (unit_prop l' cnf) \/ c' = c } ;
+                assert { forall c' . mem c' (unit_prop l' (Cons c cnf)) <-> mem c' (Cons c (unit_prop l' (Cons c cnf))) } ;
+                unit_chain_nomatter (unit_prop l' (Cons c cnf)) (Cons c (unit_prop l' cnf)) ls' ;
+                bcp_nomatter (unit_prop l' (Cons c cnf)) (Cons c (unit_prop l' cnf)) ls' ;
+                unit_prop_mono' (unit_prop l' cnf) ls' cc l ;
+                assert { forall c' . mem c' (Cons c (unit_prop l' cnf)) <-> mem c' (unit_prop l' cnf) \/ c' = c } ;
+                assert { not (clause_redundant c) } ;
+                bcp_nomatter (Cons c (unit_prop l' cnf)) (unit_prop l' (Cons c cnf)) ls' ;
+                absurd
+            )
+        end
+
 let rec lemma prop_preserves_prop (cnf : cnf) (l : lit) (chain : chain) =
     (* This is surprisingly difficult to prove: if a CNF propagates to a conflict,
        then the CNF that comes from propagating a unit literal will also propagate
@@ -949,8 +1135,26 @@ let rec lemma implied_clause (cnf : cnf) (c : clause) =
 predicate rup (cnf : cnf) (c : clause) =
     props_to_conflict (cnf ++ (negate_clause c))
 
-lemma rup_implied : forall cnf c .
-    no_redundant_clauses cnf /\ not (clause_redundant c) /\ rup cnf c -> implied cnf c
+let lemma redundant_append (cnf : cnf) (c : clause) =
+    requires { no_redundant_clauses cnf }
+    requires { not (clause_redundant c) }
+    ensures { no_redundant_clauses (cnf ++ negate_clause c) }
+    if pure { exists c' . mem c' (cnf ++ negate_clause c) /\ clause_redundant c' } then (
+        let c' = any clause ensures { mem result (cnf ++ negate_clause c) /\ clause_redundant result } in
+        assert { not (mem c' cnf) } ;
+        assert { exists l . mem (negate l) c /\ c' = Cons l Nil } ;
+        assert { forall l . not (clause_redundant (Cons l Nil)) } ;
+        absurd
+    )
+
+let lemma rup_implied (cnf : cnf) (c : clause) =
+    requires { no_redundant_clauses cnf }
+    requires { not (clause_redundant c) }
+    requires { rup cnf c }
+    ensures { implied cnf c }
+    assert { no_redundant_clauses (cnf ++ negate_clause c) by no_redundant_clauses cnf /\ not (clause_redundant c) } ;
+    assert { cnf_unsat (cnf ++ negate_clause c) by props_to_conflict (cnf ++ negate_clause c) } ;
+    implied_clause cnf c
 
 function resolve (c c' : clause) (l : lit) : clause =
     if mem l c && mem (negate l) c' then
@@ -973,6 +1177,7 @@ let lemma resolve_implied (cnf : cnf) (c c' : clause) (l : lit) =
         let l' = any lit ensures { mem result c /\ Map.get rho result.var = result.sign } in
         if pure { l = l' } then (
             let l'' = any lit ensures { mem result c' /\ Map.get rho result.var = result.sign } in
+            assert { forall l''' . mem l''' c' /\ l''' <> negate l -> mem l''' (resolve c c' l) } ;
             assert { mem l'' (resolve c c' l) by l'' <> negate l } ;
             absurd
         ) else absurd
@@ -1047,8 +1252,8 @@ predicate rat (cnf : cnf) (c : clause) =
     end
 
 let lemma rat_equisat (cnf : cnf) (c : clause) =
-    requires { no_redundant_clauses cnf }
-    requires { not (clause_redundant c) }
+    requires { no_redundant_clauses cnf /\ no_trivial_clauses cnf }
+    requires { not (clause_redundant c) /\ not (clause_trivial c) }
     requires { rat cnf c }
     ensures { equisat cnf (Cons c cnf) }
     match c with
@@ -1085,8 +1290,10 @@ let lemma rat_equisat (cnf : cnf) (c : clause) =
                              by (not (mem (negate l) (resolve c c' l)) 
                                  /\ clause_sat_with rho (resolve c c' l)) } ;
                     let l'' = any lit ensures { mem result (resolve c c' l) /\ Map.get rho' result.var = result.sign } in
-                    assert { mem l'' (resolve c c' l) } ;
-                    absurd
+                    assert { l'' <> (negate l) /\ l'' <> l } ;
+                    if mem l'' c then absurd
+                    else absurd 
+                    (* absurd *)
                 end ;
             ) ;
             assert { forall c' . mem c' cnf -> clause_sat_with rho' c' } ;
@@ -1109,8 +1316,8 @@ predicate valid_derivation (cnf : cnf) (pf : proof) =
     end
 
 let rec lemma valid_proof_means_unsat (cnf : cnf) (pf : proof) =
-    requires { no_redundant_clauses cnf }
-    requires { no_redundant_clauses pf }
+    requires { no_redundant_clauses cnf /\ no_trivial_clauses cnf }
+    requires { no_redundant_clauses pf /\ no_trivial_clauses pf }
     requires { valid_proof cnf pf }
     ensures { cnf_unsat cnf }
     variant { pf }
@@ -1224,80 +1431,204 @@ let rec predicate clause_eq (c1 c2 : clause) =
     | _, _ -> false
     end
 
+let rec check_trivial (c : clause) : bool =
+    ensures { result <-> clause_trivial c }
+    variant { c }
+    match c with
+    | Nil -> false
+    | Cons l ls -> if do_mem (negate l) ls lit_eq then true else check_trivial ls
+    end
+
 let rec do_bcp (cnf : cnf) (prop : list lit) (ghost poss_lits : Fset.fset lit) : (chain, cnf, bool) =
-    requires { no_redundant_clauses cnf }
+    requires { no_redundant_clauses cnf /\ no_trivial_clauses cnf }
     requires { forall l . Fset.mem l (cnf_lits cnf) /\ not (mem l prop) -> Fset.mem l poss_lits }
     requires { forall l . mem l prop -> is_unit l cnf }
     requires { forall l . mem l prop -> forall c . mem c (unit_prop l cnf) <-> mem c cnf }
-    ensures { let (chain', cnf', conflict) = result in 
+    ensures { let _, _, conflict = result in conflict <-> props_to_conflict cnf }
+    ensures { let chain', cnf', conflict' = result in 
               is_unit_chain cnf chain' /\ 
               cnf' = bcp cnf chain' /\
-              (mem Nil cnf' <-> conflict) /\
-              (conflict <-> props_to_conflict cnf) }
+              (mem Nil cnf' <-> conflict') /\
+              (not conflict' -> forall chain . is_unit_chain cnf' chain -> 
+                                               forall c . mem c (bcp cnf' chain) <-> mem c cnf') }
     variant { Fset.cardinal poss_lits }
-    match find_unit cnf prop with
-    | None ->
-        let ghost b = mem Nil cnf in
-        if pure { forall l . not (is_unit l cnf) } then
-            assert { forall chain . is_unit_chain cnf chain -> chain = Nil } 
-        else (
-            assert { forall l . is_unit l cnf -> mem l prop } ;
-            assert { forall l . is_unit l cnf -> forall c . mem c (unit_prop l cnf) <-> mem c cnf } ;
-            assert { forall chain . is_unit_chain cnf chain -> forall c . mem c (bcp cnf chain) <-> mem c cnf } 
-        ) ;
-        assert { b -> props_to_conflict cnf by mem Nil (bcp cnf Nil) } ;
-        (Nil, cnf, do_mem Nil cnf clause_eq)
-    | Some l -> 
-        let cnf' = (do_unit_prop l cnf) in
-        if pure { exists l' . Fset.mem l' (cnf_lits cnf') /\ not (mem l' (Cons l prop)) /\ not (Fset.mem l' (Fset.remove l poss_lits)) } then (
-            let l' = any lit ensures { Fset.mem result (cnf_lits cnf') /\ not (mem result (Cons l prop)) /\ not (Fset.mem result (Fset.remove l poss_lits)) } in
-            assert { l <> l' -> (Fset.mem l' poss_lits <-> Fset.mem l' (Fset.remove l poss_lits)) } ;
-            if pure { l = l' } then absurd 
+    if do_mem Nil cnf clause_eq then (
+        assert { props_to_conflict cnf by is_unit_chain cnf Nil /\ cnf = bcp cnf Nil /\ mem Nil cnf } ;
+        (Nil, cnf, true)
+    ) else
+        match find_unit cnf prop with
+        | None ->
+            let ghost b = mem Nil cnf in
+            (* Either there aren't any unit literals, or they've all been propagated already.
+             * In the latter case, further propagation is idempotent, so it's safe
+             * to return an empty chain in any case. *)
+            if pure { forall l . not (is_unit l cnf) } then
+                assert { forall chain . is_unit_chain cnf chain -> chain = Nil } 
             else (
-                let c = any clause ensures { mem result cnf' /\ mem l' result } in
-                let c' = any clause ensures { c = remove_lit (negate l) result /\ mem result cnf 
-                                              by mem c (map (fun c -> remove_lit (negate l) c) cnf) } in
-                assert { mem l' c' } ;
+                assert { forall l . is_unit l cnf -> mem l prop } ;
+                assert { forall l . is_unit l cnf -> forall c . mem c (unit_prop l cnf) <-> mem c cnf } ;
+                assert { forall chain . is_unit_chain cnf chain -> forall c . mem c (bcp cnf chain) <-> mem c cnf } 
+            ) ;
+            assert { b -> props_to_conflict cnf by mem Nil (bcp cnf Nil) } ;
+            (Nil, cnf, false)
+        | Some l -> 
+            let cnf' = (do_unit_prop l cnf) in
+            (* To show termination, we need to prove that every literal 
+             * that hasn't been propagated already is in poss_lits *)
+            if pure { exists l' . Fset.mem l' (cnf_lits cnf') /\ 
+                                  not (mem l' (Cons l prop)) /\ 
+                                  not (Fset.mem l' (Fset.remove l poss_lits)) } 
+            then (
+                let l' = any lit ensures { Fset.mem result (cnf_lits cnf') /\ 
+                                           not (mem result (Cons l prop)) /\ 
+                                           not (Fset.mem result (Fset.remove l poss_lits)) } 
+                in
+                assert { l <> l' -> (Fset.mem l' poss_lits <-> Fset.mem l' (Fset.remove l poss_lits)) } ;
+                if pure { l = l' } then absurd 
+                else (
+                    (* Just need to unwrap the definition of unit_prop *)
+                    let c = any clause ensures { mem result cnf' /\ mem l' result } in
+                    let ghost no_neg = map (fun c -> remove_lit (negate l) c) cnf in
+                    assert { mem c no_neg } ;
+                    let c' = any clause ensures { c = remove_lit (negate l) result /\ mem result cnf 
+                                                by mem c (map (fun c -> remove_lit (negate l) c) cnf) } in
+                    assert { mem l' c' } ;
+                    absurd
+                ) ;
                 absurd
             ) ;
-            absurd
-        ) ;
-        let (chain, cnf', conflict) = do_bcp cnf' (Cons l prop) (Fset.remove l poss_lits) in
-        if pure { not conflict /\ props_to_conflict cnf } then (
-            let ghost chain' = any chain ensures { is_unit_chain cnf result /\ 
-                                                   mem Nil (bcp cnf result) } in
-            (* let ghost chain'' = any chain ensures { is_unit_chain (unit_prop l cnf) result /\ 
-                                                    not (mem Nil (bcp (unit_prop l cnf) result)) } in *)
-            match chain' with
-            | Nil -> assert { mem Nil (bcp (unit_prop l cnf) Nil) by mem Nil (unit_prop l cnf) } ; absurd
-            | Cons l' ls' -> 
-                if pure { l = l' } then (
-                    assert { mem Nil (bcp (unit_prop l cnf) ls') } ;
+            assert { is_unit l cnf' } ;
+            assert { forall l' . mem l' prop -> is_unit l' cnf' } ;
+            let (chain, cnf', conflict) = do_bcp cnf' (Cons l prop) (Fset.remove l poss_lits) in
+            (* The central postcondition: if there is a way to propagate to an empty clause,
+             * then conflict will be true. The <- direction is easy because we have a witness.
+             * The other direction needs proof. *)
+            if pure { not conflict /\ props_to_conflict cnf } then (
+                let ghost chain' = any chain ensures { is_unit_chain cnf result /\ 
+                                                    mem Nil (bcp cnf result) } in
+                match chain' with
+                | Nil -> 
+                    (* This is an easy contradiction, because we would have conflict = true 
+                    * if the empty clause were already present. *)
+                    assert { mem Nil (bcp (unit_prop l cnf) Nil) by mem Nil (unit_prop l cnf) } ; absurd
+                | Cons l' ls' -> 
+                    if pure { l = l' } then (
+                        (* Also straightforward, because we already chose to propagate l,
+                        * so we would have gottent conflict = true by induction. *)
+                        assert { mem Nil (bcp (unit_prop l cnf) ls') } ;
+                        absurd
+                    ) ;
+                    assert { l <> l' } ;
+                    if pure { l = negate l' } then (
+                        (* This can't be, because propagating l would have led to empty if
+                        * negate l were a unit literal. *)
+                        assert { remove_lit (negate l) (Cons (negate l) Nil) = Nil } ;
+                        absurd
+                    ) ;
+                    (* Otherwise we satisfy all the preconditions for lemma prop_preserves_prop,
+                     * which means that l' :: ls' is a unit chain for cnf', which will lead to
+                     * an empty clause when propagated. *)
+                    assert { is_unit_chain (unit_prop l' cnf') ls' } ;
                     absurd
-                ) ;
-                assert { l <> l' } ;
-                if pure { l = negate l' } then (
-                    assert { remove_lit (negate l) (Cons (negate l) Nil) = Nil } ;
-                    absurd
-                ) ;
-                assert { is_unit_chain (unit_prop l' cnf) ls' } ;
-                absurd
-            end 
-        ) ;
-        (Cons l chain, cnf', conflict)
+                end 
+            ) ;
+            (Cons l chain, cnf', conflict)
+        end
+
+type rup_info = { rup_clause : clause ; chain : chain }
+type rat_info = { rat_clause : clause ; pivot_clause : clause ; pivot_info : rup_info }
+type result = Valid | InvalidEmpty cnf rup_info | InvalidStep cnf rup_info rat_info
+
+predicate rup_failure (cnf : cnf) (info : rup_info) =
+    not (rup cnf info.rup_clause) /\
+    match info.rup_clause with
+    | Nil -> 
+        let cnf' = bcp cnf info.chain in
+        is_unit_chain cnf info.chain /\ 
+        forall chain' . is_unit_chain cnf' chain' -> 
+                        forall c . mem c (bcp cnf' chain') <-> mem c cnf'
+    | Cons _ _ -> 
+        let cnf' = bcp (cnf ++ (negate_clause info.rup_clause)) info.chain in
+        is_unit_chain (cnf ++ (negate_clause info.rup_clause)) info.chain /\ 
+        forall chain' . is_unit_chain cnf' chain' -> 
+                        forall c . mem c (bcp cnf' chain') <-> mem c cnf'
     end
 
-let check_rup (cnf : cnf) (c : clause) : bool =
-    requires { no_redundant_clauses cnf }
-    requires { not (clause_redundant c) }
-    ensures { result <-> rup cnf c }
-    let _, _, conflict = do_bcp (cnf ++ (negate_clause c)) Nil (cnf_lits (cnf ++ (negate_clause c))) in
-    conflict
+predicate rat_failure (cnf : cnf) (info : rat_info) =
+    not (rat cnf info.rat_clause) /\
+    match info.rat_clause with
+    | Nil -> false
+    | Cons l _ ->
+        mem info.pivot_clause (pivot_clauses cnf l) /\
+        info.pivot_info.rup_clause = resolve info.rat_clause info.pivot_clause l /\
+        rup_failure cnf info.pivot_info
+    end
 
-let check_rat (cnf : cnf) (c : clause) =
-    requires { no_redundant_clauses cnf }
+predicate proof_failure (cnf : cnf) (result : result) =
+    match result with
+    | Valid -> false
+    | InvalidEmpty steps rup_info -> rup_failure (steps ++ cnf) rup_info
+    | InvalidStep steps rup_info rat_info -> 
+        rup_failure (steps ++ cnf) rup_info /\ rat_failure (steps ++ cnf) rat_info
+    end
+    
+let check_rup (cnf : cnf) (c : clause) : option rup_info =
+    requires { no_redundant_clauses cnf /\ no_trivial_clauses cnf }
     requires { not (clause_redundant c) }
-    ensures { result <-> rat cnf c }
+    ensures { match result with
+              | None -> rup cnf c /\ (c = Nil -> props_to_conflict cnf)
+              | Some info -> info.rup_clause = c /\ rup_failure cnf info
+              end }
+    let cnf' = match c with 
+               | Nil -> cnf 
+               | Cons _ _ -> 
+                    assert { no_trivial_clauses (negate_clause c) } ;
+                    cnf ++ (negate_clause c) 
+               end
+    in
+    assert { no_trivial_clauses cnf' } ;
+    let ghost lits = cnf_lits cnf' in
+    let chain, _, conflict = do_bcp cnf' Nil lits in
+    if conflict then (
+        match c with
+        | Nil ->
+            unit_chain_mono cnf chain ;
+            unit_prop_mono cnf chain Nil ;
+            let ghost nc = Cons {var=0 ; sign=true} (Cons {var=0 ; sign=false} Nil) in
+            unit_chain_nomatter (Cons nc cnf) (cnf ++ negate_clause c) chain ;
+            bcp_nomatter (Cons nc cnf) (cnf ++ negate_clause c) chain ;
+            assert { props_to_conflict (cnf ++ (negate_clause c)) }
+        | _ -> assert { props_to_conflict cnf' }
+        end ;
+        None
+    ) else (
+        match c with
+        | Nil ->
+            if pure { exists chain' . is_unit_chain (cnf ++ negate_clause Nil) chain' /\
+                                      mem Nil (bcp (cnf ++ negate_clause Nil) chain') } then (
+                let chain' = any chain ensures { is_unit_chain (cnf ++ negate_clause Nil) result /\ 
+                                                 mem Nil (bcp (cnf ++ negate_clause Nil) result) } in
+                let ghost nc = Cons {var=0 ; sign=true} (Cons {var=0 ; sign=false} Nil) in
+                unit_chain_nomatter (cnf ++ negate_clause Nil) (Cons nc cnf) chain' ;
+                unit_chain_mono' cnf chain' {var=0; sign=true} ;
+                bcp_nomatter (cnf ++ negate_clause Nil) (Cons nc cnf) chain' ;
+                unit_prop_mono' cnf chain' Nil {var=0; sign=true} ;
+                absurd
+            ) ;
+            assert { not (rup cnf c) }
+        | _ -> assert { not (rup cnf c) }
+        end ;
+        Some { rup_clause = c ; chain = chain }
+    )
+
+let check_rat (cnf : cnf) (c : clause) : option rat_info =
+    requires { no_redundant_clauses cnf /\ no_trivial_clauses cnf }
+    requires { not (clause_redundant c) /\ not (clause_trivial c) }
+    requires { c <> Nil }
+    ensures { match result with
+              | None -> rat cnf c
+              | Some info -> info.rat_clause = c /\ rat_failure cnf info
+              end }
     let rec get_pivots (l : lit) (cnf : cnf) : list clause =
         ensures { forall c . mem c result <-> mem c (pivot_clauses cnf l) }
         variant { cnf }
@@ -1315,66 +1646,122 @@ let check_rat (cnf : cnf) (c : clause) =
         ensures { result = resolve c c' l }
         remove_redundant_lits ((do_remove_lit l c) ++ (do_remove_lit (negate l) c'))
     in
-    let rec check_pivots (l : lit) (ps : list clause) (ghost qs : list clause) : bool =
+    let rec check_pivots (l : lit) (ps : list clause) (ghost qs : list clause) : option (clause, rup_info) =
         requires { no_redundant_clauses ps }
-        requires { mem l c }
+        requires { exists cs . c = Cons l cs }
         requires { forall c' . mem c' ps \/ mem c' qs <-> mem c' (pivot_clauses cnf l) }
         requires { forall c' . mem c' qs -> rup cnf (resolve c c' l) }
-        ensures { result <-> forall c' . mem c' ps -> rup cnf (resolve c c' l) }
+        ensures { match result with
+                  | None -> forall c' . mem c' ps -> rup cnf (resolve c c' l)
+                  | Some (c', info) ->
+                    not (rat cnf c) /\
+                    mem c' (pivot_clauses cnf l) /\
+                    info.rup_clause = resolve c c' l /\
+                    rup_failure cnf info
+                  end }
         variant { ps }
         match ps with
-        | Nil -> true
-        | Cons p ps' -> check_rup cnf (do_resolve c p l) && check_pivots l ps' (Cons p qs)
+        | Nil -> None
+        | Cons p ps' -> 
+            assert { mem (negate l) p by mem p (pivot_clauses cnf l) } ;
+            match check_rup cnf (do_resolve c p l) with
+            | None -> check_pivots l ps' (Cons p qs)
+            | Some info -> Some (p, info)
+            end
         end
     in
     match c with
-    | Nil -> false
-    | Cons l _ -> check_pivots l (get_pivots l cnf) Nil
+    | Nil -> absurd
+    | Cons l _ -> 
+        match check_pivots l (get_pivots l cnf) Nil with
+        | None -> None
+        | Some (p, info) -> Some { rat_clause = c ; pivot_clause = p ; pivot_info = info }
+        end
     end
 
-let rec check_proof (cnf : cnf) (pf : proof) : bool =
-    requires { no_redundant_clauses cnf }
-    requires { no_redundant_clauses pf }
-    ensures { result <-> valid_proof cnf pf }
+let rec check_proof (cnf : cnf) (pf : proof) (steps : cnf) (ghost orig : cnf) : result =
+    requires { cnf = steps ++ orig }
+    requires { no_redundant_clauses cnf /\ no_trivial_clauses cnf }
+    requires { no_redundant_clauses pf /\ no_trivial_clauses pf }
+    ensures { match result with
+              | Valid -> valid_proof cnf pf
+              | _ -> proof_failure orig result
+              end }
     variant { pf }
     match pf with
-    | Nil -> let _, _, conflict = do_bcp cnf Nil (cnf_lits cnf) in conflict
-    | Cons c cs -> (check_rup cnf c || check_rat cnf c) && check_proof (Cons c cnf) cs
+    | Nil -> 
+        match check_rup cnf Nil with
+        | None -> Valid
+        | Some rup_info -> InvalidEmpty steps rup_info
+        end
+    | Cons c cs -> 
+        match check_rup cnf c with
+        | None -> check_proof (Cons c cnf) cs (Cons c steps) orig
+        | Some rup_info ->
+            match c with
+            | Nil -> InvalidEmpty steps rup_info
+            | _ ->
+                match check_rat cnf c with
+                | None -> check_proof (Cons c cnf) cs (Cons c steps) orig
+                | Some rat_info -> InvalidStep steps rup_info rat_info
+                end
+            end
+        end
     end
 
-let rec check_derivation (cnf : cnf) (pf : proof) : bool =
-    requires { no_redundant_clauses cnf }
-    requires { no_redundant_clauses pf }
-    ensures { result <-> valid_derivation cnf pf }
+let rec check_derivation (cnf : cnf) (pf : proof) (steps : cnf) (ghost orig : cnf) : result =
+    requires { cnf = steps ++ orig }
+    requires { no_redundant_clauses cnf /\ no_trivial_clauses cnf }
+    requires { no_redundant_clauses pf /\ no_trivial_clauses pf }
+    ensures { match result with
+              | Valid -> valid_derivation cnf pf
+              | _ -> proof_failure orig result
+              end }
     variant { pf }
     match pf with
-    | Nil -> true
-    | Cons c cs -> (check_rup cnf c || check_rat cnf c) && check_derivation (Cons c cnf) cs
+    | Nil -> Valid
+    | Cons c cs -> 
+        match check_rup cnf c with
+        | None -> check_derivation (Cons c cnf) cs (Cons c steps) orig
+        | Some rup_info ->
+            match c with
+            | Nil -> InvalidEmpty steps rup_info
+            | _ ->
+                match check_rat cnf c with
+                | None -> check_derivation (Cons c cnf) cs (Cons c steps) orig
+                | Some rat_info -> InvalidStep steps rup_info rat_info
+                end
+            end
+        end
     end
 
 let rec remove_redundant_clauses (cnf : cnf) : cnf =
     ensures { no_redundant_clauses result }
+    ensures { no_trivial_clauses result }
     ensures { forall rho . cnf_sat_with rho cnf <-> cnf_sat_with rho result }
     variant { cnf }
     match cnf with
     | Nil -> Nil
     | Cons c cs -> 
-        let c' = remove_redundant_lits c in
-        let cs' = remove_redundant_clauses cs in
-        let cnf' = Cons c' cs' in
-        if pure { exists rho . cnf_sat_with rho cnf /\ not (cnf_sat_with rho cnf') } then (
-            let rho = any valuation ensures { cnf_sat_with result cnf /\ not (cnf_sat_with result cnf') } in
-            assert { clause_sat_with rho c' } ;
-            assert { cnf_sat_with rho cs' } ;
-            absurd
-        ) ;
-        if pure { exists rho . cnf_sat_with rho cnf' /\ not (cnf_sat_with rho cnf) } then (
-            let rho = any valuation ensures { cnf_sat_with result cnf' /\ not (cnf_sat_with result cnf) } in
-            assert { clause_sat_with rho c } ;
-            assert { cnf_sat_with rho cs } ;
-            absurd
-        ) ;
-        cnf'
+        if check_trivial c then remove_redundant_clauses cs
+        else ( 
+            let c' = remove_redundant_lits c in
+            let cs' = remove_redundant_clauses cs in
+            let cnf' = Cons c' cs' in
+            if pure { exists rho . cnf_sat_with rho cnf /\ not (cnf_sat_with rho cnf') } then (
+                let rho = any valuation ensures { cnf_sat_with result cnf /\ not (cnf_sat_with result cnf') } in
+                assert { clause_sat_with rho c' } ;
+                assert { cnf_sat_with rho cs' } ;
+                absurd
+            ) ;
+            if pure { exists rho . cnf_sat_with rho cnf' /\ not (cnf_sat_with rho cnf) } then (
+                let rho = any valuation ensures { cnf_sat_with result cnf' /\ not (cnf_sat_with result cnf) } in
+                assert { clause_sat_with rho c } ;
+                assert { cnf_sat_with rho cs } ;
+                absurd
+            ) ;
+            cnf'
+        )
     end
 
 end

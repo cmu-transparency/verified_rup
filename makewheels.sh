@@ -2,6 +2,7 @@
 
 ENVS=('38' '39' '310')
 
+eval "$(opam config env)"
 eval "$(conda shell.bash hook)"
 
 for zone in "${ENVS[@]}"

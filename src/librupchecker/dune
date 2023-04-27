@@ -1,8 +1,23 @@
 (executable
- (name checker)
- (modes (native shared_object))
- (foreign_stubs
-  (language c)
-  (names stubs))
- (flags (:standard -w -27))
+ (name generate)
+ (modules Generate Bindings Rup)
+ (libraries ctypes ctypes.stubs)
+)
+
+(rule
+ (targets rup.ml)
+ (deps rup_pure.mlw)
+ (action (run why3 extract %{deps} -D ocaml64 -o %{targets}))
+)
+
+(rule
+ (targets drup.c drup.h drup_bindings.ml)
+ (deps (:gen ./generate.exe))
+ (action (run ./generate.exe .))
+)
+
+(rule
+ (targets libdrupchecker.so)
+ (deps drup.c drup_bindings.ml)
+ (action (run ocamlfind opt -g -ccopt -fPIC -output-complete-obj -runtime-variant _pic -package ctypes.stubs drup.c drup_bindings.ml rup.ml bindings.ml link.ml init.c -linkpkg -o %{targets}))
 )

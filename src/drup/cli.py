@@ -14,11 +14,23 @@ def main():
 
 	result = checker.check_proof_from_file(bytes(args.dimacs, 'utf-8'), bytes(args.drup, 'utf-8'))
 	
-	if result == -4:
-		print("Error parsing formula. Check that the DIMACS input is properly formatted.", file=sys.stderr)
+	if result == -2:
+		print(
+			(
+				f"Error parsing formula or file '{args.dimacs}' not found. " 
+				f"Check that the DIMACS input is properly formatted."
+			),
+			file=sys.stderr
+		)
 		return -4
-	elif result == -5:
-		print("Error parsing proof. Check that the DRUP input is properly formatted.", file=sys.stderr)
+	elif result == -2:
+		print(
+			(
+				f"Error parsing proof or file '{args.proof}' not found. " 
+				f"Check that the proof input is properly formatted."
+			),
+			file=sys.stderr
+		)
 		return -5
 	elif result == -6:
 		print(
@@ -37,3 +49,6 @@ def main():
 		else:
 			print("invalid")
 			return -1
+
+if __name__ == '__main__':
+	main()
