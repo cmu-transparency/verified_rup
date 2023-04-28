@@ -1,7 +1,10 @@
 import sys
 import argparse
 
-from . import checker
+from drup.wrappers import (
+  check_proof_from_files,
+  check_derivation_from_files
+)
 
 def main():
 	parser = argparse.ArgumentParser(
@@ -10,45 +13,14 @@ def main():
                     epilog='For more information visit https://github.com/cmu-transparency/verified_rup')
 	parser.add_argument('dimacs', help='Path to a DIMACS CNF formula')
 	parser.add_argument('drup', help='Path to a DRUP/DRAT proof')
+	parser.add_argument('-d', '--derivation', action='store_true', help='Check each step, ignore absence of empty clause')
+	parser.add_argument('-v', '--verbose', action='store_true', help='Print detailed information about failed checks')
 	args = parser.parse_args()
 
-	result = checker.check_proof_from_file(bytes(args.dimacs, 'utf-8'), bytes(args.drup, 'utf-8'))
-	
-	if result == -2:
-		print(
-			(
-				f"Error parsing formula or file '{args.dimacs}' not found. " 
-				f"Check that the DIMACS input is properly formatted."
-			),
-			file=sys.stderr
-		)
-		return -4
-	elif result == -2:
-		print(
-			(
-				f"Error parsing proof or file '{args.proof}' not found. " 
-				f"Check that the proof input is properly formatted."
-			),
-			file=sys.stderr
-		)
-		return -5
-	elif result == -6:
-		print(
-			(
-				"Unknown error checking certificate. "
-				"Please submit an issue at https://github.com/cmu-transparency/verified_rup/issues, "
-				"including the formula and proof you are checking."
-			),
-			file=sys.stderr
-		)
-		return -6
+	if not args.derivation:
+		print(check_proof_from_files(args.dimacs, args.drup, verbose=args.verbose))
 	else:
-		if result == 0:
-			print("valid")
-			return 0
-		else:
-			print("invalid")
-			return -1
+		print(check_derivation_from_files(args.dimacs, args.drup, verbose=args.verbose))
 
 if __name__ == '__main__':
 	main()

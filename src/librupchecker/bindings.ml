@@ -196,7 +196,7 @@ let free_result r =
   let root = getf r r_root in
   Root.release root
 
-let check_from_data cnf pf =
+let check cnf pf =
   let cnf_arr = CArray.from_ptr (getf !@cnf cn_clauses) (getf !@cnf cn_len) in
   let cnf = List.map to_clause (CArray.to_list cnf_arr) in
   let pf_arr = CArray.from_ptr (getf !@pf cn_clauses) (getf !@pf cn_len) in
@@ -229,12 +229,102 @@ let check_from_data cnf pf =
     setf !@result_p r_root root ;
     result_p
 
+let check_derivation cnf pf =
+  let cnf_arr = CArray.from_ptr (getf !@cnf cn_clauses) (getf !@cnf cn_len) in
+  let cnf = List.map to_clause (CArray.to_list cnf_arr) in
+  let pf_arr = CArray.from_ptr (getf !@pf cn_clauses) (getf !@pf cn_len) in
+  let pf = List.map to_clause (CArray.to_list pf_arr) in
+  let cnf = Rup.remove_redundant_clauses cnf in
+  let pf = Rup.remove_redundant_clauses pf in
+  let result_t = make result in
+  match Rup.check_derivation cnf pf [] with
+  | Rup.Valid -> 
+    setf result_t r_valid 1 ; 
+    let result_p = Ctypes.allocate result result_t in
+    let root = Root.create result_p in
+    setf !@result_p r_root root ;
+    result_p
+  | Rup.InvalidEmpty (steps, info) -> 
+    setf result_t r_valid 0 ; 
+    setf result_t r_steps (of_cnf steps) ;
+    (* print_clause info.Rup.rup_clause ; *)
+    setf result_t r_rup_info (of_rup_info info) ;
+    let result_p = Ctypes.allocate result result_t in
+    let root = Root.create result_p in
+    setf !@result_p r_root root ;
+    result_p
+  | Rup.InvalidStep (steps, rup_info, rat_info) -> 
+    setf result_t r_valid (-1) ; 
+    setf result_t r_steps (of_cnf steps) ;
+    setf result_t r_rup_info (of_rup_info rup_info) ; 
+    setf result_t r_rat_info (of_rat_info rat_info) ;
+    let result_p = Ctypes.allocate result result_t in
+    let root = Root.create result_p in
+    setf !@result_p r_root root ;
+    result_p
+  
+let check_fast cnf pf =
+  let cnf_arr = CArray.from_ptr (getf !@cnf cn_clauses) (getf !@cnf cn_len) in
+  let cnf = List.map to_clause (CArray.to_list cnf_arr) in
+  let pf_arr = CArray.from_ptr (getf !@pf cn_clauses) (getf !@pf cn_len) in
+  let pf = List.map to_clause (CArray.to_list pf_arr) in
+  let cnf = Rup.remove_redundant_clauses cnf in
+  let pf = Rup.remove_redundant_clauses pf in
+  let result_t = make result in
+  match Rup.check_proof cnf pf [] with
+  | Rup.Valid -> 
+    setf result_t r_valid 1 ; 
+    let result_p = Ctypes.allocate result result_t in
+    let root = Root.create result_p in
+    setf !@result_p r_root root ;
+    result_p
+  | Rup.InvalidEmpty (_, _) -> 
+    setf result_t r_valid 0 ; 
+    let result_p = Ctypes.allocate result result_t in
+    let root = Root.create result_p in
+    setf !@result_p r_root root ;
+    result_p
+  | Rup.InvalidStep (_, _, _) -> 
+    setf result_t r_valid (-1) ; 
+    let result_p = Ctypes.allocate result result_t in
+    let root = Root.create result_p in
+    setf !@result_p r_root root ;
+    result_p
+
+let check_derivation_fast cnf pf =
+  let cnf_arr = CArray.from_ptr (getf !@cnf cn_clauses) (getf !@cnf cn_len) in
+  let cnf = List.map to_clause (CArray.to_list cnf_arr) in
+  let pf_arr = CArray.from_ptr (getf !@pf cn_clauses) (getf !@pf cn_len) in
+  let pf = List.map to_clause (CArray.to_list pf_arr) in
+  let cnf = Rup.remove_redundant_clauses cnf in
+  let pf = Rup.remove_redundant_clauses pf in
+  let result_t = make result in
+  match Rup.check_derivation cnf pf [] with
+  | Rup.Valid -> 
+    setf result_t r_valid 1 ; 
+    let result_p = Ctypes.allocate result result_t in
+    let root = Root.create result_p in
+    setf !@result_p r_root root ;
+    result_p
+  | Rup.InvalidEmpty (_, _) -> 
+    setf result_t r_valid 0 ; 
+    let result_p = Ctypes.allocate result result_t in
+    let root = Root.create result_p in
+    setf !@result_p r_root root ;
+    result_p
+  | Rup.InvalidStep (_, _, _) -> 
+    setf result_t r_valid (-1) ; 
+    let result_p = Ctypes.allocate result result_t in
+    let root = Root.create result_p in
+    setf !@result_p r_root root ;
+    result_p
+
 module Stubs(I: Cstubs_inverted.INTERNAL) = 
 struct
 
-	let () = I.structure struct_lit
+  let () = I.structure struct_lit
   let () = I.typedef struct_lit "lit"
-	let () = I.structure struct_clause
+  let () = I.structure struct_clause
   let () = I.typedef struct_clause "clause"
   let () = I.structure struct_cnf
   let () = I.typedef struct_cnf "cnf"
@@ -242,11 +332,14 @@ struct
   let () = I.typedef struct_chain "chain"
   let () = I.structure struct_rup_info
   let () = I.typedef struct_rup_info "rup_info"
-	let () = I.structure struct_rat_info
+  let () = I.structure struct_rat_info
   let () = I.typedef struct_rat_info "rat_info"
   let () = I.structure struct_result
   let () = I.typedef struct_result "cresult"
-  let () = I.internal "check_from_data" (ptr cnf @-> ptr cnf @-> returning (ptr result)) check_from_data
+  let () = I.internal "check" (ptr cnf @-> ptr cnf @-> returning (ptr result)) check
+  let () = I.internal "check_derivation" (ptr cnf @-> ptr cnf @-> returning (ptr result)) check_derivation
+  let () = I.internal "check_fast" (ptr cnf @-> ptr cnf @-> returning (ptr result)) check_fast
+  let () = I.internal "check_derivation_fast" (ptr cnf @-> ptr cnf @-> returning (ptr result)) check_derivation_fast
   let () = I.internal "free_rup_info" (ptr rup_info @-> returning void) free_rup_info
   let () = I.internal "free_rat_info" (ptr rat_info @-> returning void) free_rat_info
   let () = I.internal "free_result" (ptr result @-> returning void) free_result

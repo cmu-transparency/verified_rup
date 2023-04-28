@@ -1720,6 +1720,19 @@ let rec check_derivation (cnf : cnf) (pf : proof) (steps : cnf) (ghost orig : cn
     variant { pf }
     match pf with
     | Nil -> Valid
+	| Cons c Nil -> 
+		match check_rup cnf c with
+		| None -> Valid
+		| Some rup_info -> 
+			match c with
+			| Nil -> InvalidEmpty steps rup_info
+			| _ -> 
+				match check_rat cnf c with
+				| None -> Valid
+				| Some rat_info -> InvalidStep steps rup_info rat_info
+				end
+			end
+		end
     | Cons c cs -> 
         match check_rup cnf c with
         | None -> check_derivation (Cons c cnf) cs (Cons c steps) orig
