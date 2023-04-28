@@ -17,8 +17,8 @@ class SDist(_sdist):
         build_checker()
         shutil.copy("_build/default/src/librupchecker/libdrupchecker.so", "src/drup/libdrupchecker.so")
         super().run()
-        # cmd = ["dune", "clean"]
-        # subprocess.run(cmd, check=False, stdout=sys.stdout, stderr=sys.stderr)
+        cmd = ["dune", "clean"]
+        subprocess.run(cmd, check=False, stdout=sys.stdout, stderr=sys.stderr)
         os.unlink("src/drup/libdrupchecker.so")
 
 setup(
