@@ -18,7 +18,7 @@ If you use a recent Linux distribution on x86_64, you should be able to install 
 ```bash
 $ pip install drup
 ```
-Otherwise, you need to have OCaml (>= 4.12), Why3 (>= 1.5.1), and Dune (>=2.9.3) installed.
+Otherwise, you need to have OCaml (>= 4.12), Ctypes (>=0.20), Why3 (>= 1.5.1), and Dune (>=2.9.3) installed.
 The most straightforward way to install these is to use [opam](https://opam.ocaml.org/doc/Install.html), which is available in most package systems, and then install Why3 and Dune (a sufficiently recent version of OCaml should already be installed with Opam): 
 ```bash
 $ opam install why3 dune
@@ -44,73 +44,70 @@ $ pip install dist/*.whl
 The package provides a command line interface for checking proofs stored in files:
 ```bash
 $ drup --help
+usage: drup [-h] [-d] [-v] dimacs drup
 
-usage: drup [-h] dimacs drup
-
-Checks DRUP & DRAT proofs against DIMACS source. 
-Returns 0 if the proof is valid, -1 if not, or a negative error code if the input is invalid.
+Checks DRUP & DRAT proofs against DIMACS source. Returns 0 if the proof is valid, -1 if not, or a negative error code if the input is invalid.
 
 positional arguments:
-  dimacs      Path to a DIMACS CNF formula
-  drup        Path to a DRUP/DRAT proof
+  dimacs            Path to a DIMACS CNF formula
+  drup              Path to a DRUP/DRAT proof
 
-options:
-  -h, --help  show this help message and exit
-```
+optional arguments:
+  -h, --help        show this help message and exit
+  -d, --derivation  Check each step, ignore absence of empty clause
+  -v, --verbose     Print detailed information about failed checks
 
-### As a C library
-
-If you do not intend to use the Python bindings, then you will find the C shared object in the Python package directory:
-```bash
-$(PYTHON_PATH)/site-packages/rup/librupchecker.{so|dll}
-```
-The C library exposes wrappers around the core checker, which you can declare external in your C code:
-```C
-int check_derivation_from_strings(const char *dimacs, const char *cs);
-int check_proof_from_file(const char *dimacs_path, const char *drup_path);
-int check_proof_from_strings(const char *dimacs, const char *drup);
-int check_step_from_strings(const char *dimacs, const char *c);
-```
-These functions return `0` if the proof is valid, `-1` if not, and a negative error code if the input is invalid.
-Before they can be called, the library must be initialized with a call to `do_startup` passing the current `argv`, which calls `caml_startup`:
-```C
-int do_startup(char **argv);
+For more information visit https://github.com/cmu-transparency/verified_rup
 ```
 
 ### As a Python module
 
-The Python bindings expose these same functions, but will call `do_startup` automatically when the package is imported, so there is no need to call it manually.
-If the arguments given to the Python bindings cannot be opened (in the case of files) or parsed, then they raise `ValueError`.
-If the proof is valid, then the Python bindings return `True`, and `False` otherwise.
-
-As described, the package is straightforward to use:
+See the documentation for details of the API.
+The primary function is `drup.check_proof`, or alternatively, `drup.check_derivation` to check each step of the proof, ignoring the absence of an empty clause).
 ```python
-import drup
+def check_proof(formula : Cnf, proof : Proof, verbose : bool = False) -> CheckerResult:
+  """Check a sequence of RUP and RAT clauses against a CNF. Inputs are Python iterables
+  of clauses, where each clause is an iterable of signed Python ints.
 
-cnf = """
-p cnf 4 8
- 1  2 -3 0
--1 -2  3 0
- 2  3 -4 0
--2 -3  4 0
- 1  3  4 0
--1 -3 -4 0
--1  2  4 0
- 1 -2 -4 0
-"""
+  Args:
+    formula (Cnf): Cnf as an iterable of clauses.
+    proof (Proof): Iterable of RUP or RAT clauses.
+    verbose (bool, optional): Return detailed information
+      if the check fails. Defaults to False.
 
-pf = """
-1 2 0
-1 0
-2 0
-0
-"""
-
-if drup.check_proof_from_strings(cnf, pf):
-    print("Valid")
-else:
-    print("Invalid")
+  Returns:
+    CheckerResult: CheckerResult struct representing the result of the check.
+  
+  Raises:
+    ValueError: If the formula or proof cannot be formatted.
+  """
 ```
+This takes a CNF and Proof as an iterable of iterables of signed integers, and returns a `CheckerResult`.
+```python
+class CheckerResult:
+
+  '''
+  Result of a proof check.
+
+  Attributes:
+
+    outcome (`Outcome`): The outcome of the check. If the check
+      succeeded, this will be Outcome.VALID. If the check failed,
+      this will be Outcome.INVALID.
+
+    steps (`Optional[Cnf]`): Completed proof steps prior to an invalid step, 
+      if the proof was invalid.
+
+    rup_info (`Optional[RupInfo]`): Information on a failed RUP check,
+      if the proof was invalid.
+
+    rat_info (`Optional[RatInfo]`): Information on a failed RAT check,
+      if the proof was invalid. The RAT clause in this object will
+      be the same as the RUP clause in `rup_info`.
+  '''
+```
+There are corresponding convenience functions `check_proof_from_strings` and `check_proof_from_files`, similarly for `check_derivation`.
+
 
 ## Performance
 

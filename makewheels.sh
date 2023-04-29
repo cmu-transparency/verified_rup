@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# run from inside the manylinux2014 container,
+# updated with the appropriate versions of opam, dune, ctypes, and why3:
+# docker run -i -t -v `pwd`:/io manylinux2014_opam /bin/bash
+
 ENVS=('38' '39' '310')
 
 eval "$(opam config env)"

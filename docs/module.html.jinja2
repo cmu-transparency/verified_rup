@@ -1,0 +1,69 @@
+{% extends "default/module.html.jinja2" %}
+
+{% block nav_index %}
+        {% set index = module.docstring | to_markdown | to_html | attr("toc_html") %}
+        {% if index %}
+            <h2>Readme</h2>
+            {{ index | safe }}
+        {% endif %}
+{% endblock %}
+
+{% block nav_submodules %}{% endblock %}
+
+{% block content %}
+    <main class="pdoc">
+        {% block module_info %}
+            <section class="module-info">
+                {% block edit_button %}
+                    {% if edit_url %}
+                        {% if "github.com" in edit_url %}
+                            {% set edit_text = "Edit on GitHub" %}
+                        {% elif "gitlab" in edit_url %}
+                            {% set edit_text = "Edit on GitLab" %}
+                        {% else %}
+                            {% set edit_text = "Edit Source" %}
+                        {% endif %}
+                        <a class="pdoc-button git-button" href="{{ edit_url }}">{{ edit_text }}</a>
+                    {% endif %}
+                {% endblock %}
+                {{ module_name() }}
+                {{ docstring(module) }}
+                {{ view_source_state(module) }}
+                {{ view_source_button(module) }}
+                {{ view_source_code(module) }}
+            </section>
+        {% endblock %}
+        <h2>API Documentation</h2>
+        {% block module_contents %}
+            {% for m in module.flattened_own_members if is_public(m) | trim %}
+                <section id="{{ m.qualname or m.name }}">
+                    {{ member(m) }}
+                    {% if m.kind == "class" %}
+                        {% for m in m.own_members if m.kind != "class" and is_public(m) | trim %}
+                            <div id="{{ m.qualname }}" class="classattr">
+                                {{ member(m) }}
+                            </div>
+                        {% endfor %}
+                        {% set inherited_members = inherited(m) | trim %}
+                        {% if inherited_members %}
+                            <div class="inherited">
+                                <h5>Inherited Members</h5>
+                                <dl>
+                                    {{ inherited_members }}
+                                </dl>
+                            </div>
+                        {% endif %}
+                    {% endif %}
+                </section>
+            {% endfor %}
+        {% endblock %}
+    </main>
+    {% if mtime %}
+        {% include "livereload.html.jinja2" %}
+    {% endif %}
+    {% block search_js %}
+        {% if search and all_modules|length > 1 %}
+            {% include "search.html.jinja2" %}
+        {% endif %}
+    {% endblock %}
+{% endblock content %}

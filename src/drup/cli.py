@@ -1,3 +1,5 @@
+__all__ = []
+
 import sys
 import argparse
 
