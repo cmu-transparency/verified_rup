@@ -117,3 +117,21 @@ check_proof_from_strings = drup.wrappers.check_proof_from_strings
 check_derivation = drup.wrappers.check_derivation
 check_derivation_from_files = drup.wrappers.check_derivation_from_files
 check_derivation_from_strings = drup.wrappers.check_derivation_from_strings
+
+__all__ = [
+  'Lit',
+  'Clause',
+  'Chain',
+  'Cnf',
+  'Proof',
+  'Outcome',
+  'RupInfo',
+  'RatInfo',
+  'CheckerResult',
+  'check_proof',
+  'check_proof_from_files',
+  'check_proof_from_strings',
+  'check_derivation',
+  'check_derivation_from_files',
+  'check_derivation_from_strings',
+]

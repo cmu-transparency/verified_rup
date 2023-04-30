@@ -52,11 +52,11 @@ class RatInfo:
   Information on a failed RAT check.
 
   **Attributes**:
-
     clause (`Clause`): The clause that failed the RAT check.
 
     pivot_clause (`Clause`): A pivot clause that failed a RUP check.
-    rup_info (RupInfo): Information on the failed RUP check.
+
+    rup_info (`RupInfo`): Information on the failed RUP check.
   '''
 
   def __init__(self, clause : Clause, pivot_clause : Clause, rup_info : RupInfo):
@@ -218,7 +218,7 @@ def _check_proof_from_structs(
       if the check fails. Defaults to False.
 
   **Returns:**
-    `CheckerResult:` CheckerResult struct representing the result of the check.
+    `CheckerResult`: CheckerResult struct representing the result of the check.
       The result will be Outcome.VALID only if each step of the proof is either
       RUP or RAT, and the last clause is empty.
   
@@ -276,7 +276,7 @@ def check_proof(formula : Cnf, proof : Proof, verbose : bool = False) -> Checker
       if the check fails. Defaults to False.
 
   **Returns:**
-    `CheckerResult:` CheckerResult struct representing the result of the check.
+    `CheckerResult`: CheckerResult struct representing the result of the check.
   
   **Raises:**
     ValueError: If the formula or proof cannot be formatted.
@@ -294,7 +294,7 @@ def check_proof_from_strings(formula : str, proof : str, verbose : bool = False)
       if the check fails. Defaults to False.
   
   **Returns:**
-    `CheckerResult:` CheckerResult struct representing the result of the check.
+    `CheckerResult`: CheckerResult struct representing the result of the check.
 
   **Raises:**
     ValueError: If the formula or proof cannot be parsed or formatted.
@@ -324,7 +324,7 @@ def check_proof_from_files(formula_file : str, proof_file : str, verbose : bool 
       if the check fails. Defaults to False.
 
   **Returns:**
-    `CheckerResult:` CheckerResult struct representing the result of the check.
+    `CheckerResult`: CheckerResult struct representing the result of the check.
 
   **Raises:**
     ValueError: If the formula or proof cannot be parsed or formatted.
@@ -352,7 +352,7 @@ def _check_derivation_from_structs(
       if the check fails. Defaults to False.
 
   **Returns:**
-    `CheckerResult:` CheckerResult struct representing the result of the check.
+    `CheckerResult`: CheckerResult struct representing the result of the check.
       If each step in the derivation is either RUP or RAT, then the result will
       be Outcome.VALID. Otherwise, the result will be Outcome.INVALID.
       The derivation does not need to contain the empty clause.
@@ -411,7 +411,7 @@ def check_derivation(formula : Cnf, derivation : Proof, verbose : bool = False) 
       if the check fails. Defaults to False.
 
   **Returns:**
-    `CheckerResult:` CheckerResult struct representing the result of the check.
+    `CheckerResult`: CheckerResult struct representing the result of the check.
       If each step in the derivation is either RUP or RAT, then the result will
       be Outcome.VALID. Otherwise, the result will be Outcome.INVALID.
       The derivation does not need to contain the empty clause.
@@ -434,7 +434,7 @@ def check_derivation_from_strings(formula : str, derivation : str, verbose : boo
       if the check fails. Defaults to False.
   
   **Returns:**
-    `CheckerResult:` CheckerResult struct representing the result of the check.
+    `CheckerResult`: CheckerResult struct representing the result of the check.
       If each step in the derivation is either RUP or RAT, then the result will
       be Outcome.VALID. Otherwise, the result will be Outcome.INVALID.
       The derivation does not need to contain the empty clause.
@@ -470,7 +470,7 @@ def check_derivation_from_files(formula_file : str, derivation_file : str, verbo
       if the check fails. Defaults to False.
 
   **Returns:**
-    `CheckerResult:` CheckerResult struct representing the result of the check.
+    `CheckerResult`: CheckerResult struct representing the result of the check.
       If each step in the derivation is either RUP or RAT, then the result will
       be Outcome.VALID. Otherwise, the result will be Outcome.INVALID.
       The derivation does not need to contain the empty clause.
