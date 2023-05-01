@@ -26,6 +26,7 @@
     <li><a href="#installation">Installation</a></li>
     <li><a href="#usage">Usage</a></li>
     <li><a href="#performance">Performance</a></li>
+    <li><a href="#verification">Verification</a></li>
     <li><a href="#acknowledgements">Acknowledgements</a></li>
   </ul></li>
 </ul>
@@ -133,17 +134,12 @@ The core of the checker is written in <a href="https://why3.lri.fr/">Why3</a>, w
 <li>Accordingly, the frontend does not accept proofs in binary format.</li>
 </ul>
 
-<p>The verification can be checked by running <code>src/librupchecker/rup_pure.mlw</code> in Why3. 
-Most of the verification conditions complete with the <code>Auto level 0</code> tactic, and the rest either with a few levels of splitting followed by <code>Auto 0</code> or <code>Auto 1</code>, or simply with <code>Auto 2</code>.
-It was developed using Why3 1.5.1, Alt-Ergo 2.4.0, Z3 4.8.6, and CVC4 1.8.
-Verification has not been attempted with earlier versions of Why3 or the provers.</p>
-
 <h2 id="installation">Installation</h2>
 
 <p>If you use a recent Linux distribution on x86_64, you should be able to install the compiled wheel from PyPI:</p>
 
 <div class="pdoc-code codehilite">
-<pre><span></span><code>$<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>drup
+<pre><span></span><code>$ pip install drup
 </code></pre>
 </div>
 
@@ -151,7 +147,7 @@ Verification has not been attempted with earlier versions of Why3 or the provers
 The most straightforward way to install these is to use <a href="https://opam.ocaml.org/doc/Install.html">opam</a>, which is available in most package systems, and then install Why3 and Dune (a sufficiently recent version of OCaml should already be installed with Opam): </p>
 
 <div class="pdoc-code codehilite">
-<pre><span></span><code>$<span class="w"> </span>opam<span class="w"> </span>install<span class="w"> </span>why3<span class="w"> </span>dune
+<pre><span></span><code>$ opam install why3 dune
 </code></pre>
 </div>
 
@@ -160,17 +156,17 @@ The most straightforward way to install these is to use <a href="https://opam.oc
 <p>Once OCaml and Why3 are installed, make sure that Python <code>build</code> is installed:</p>
 
 <div class="pdoc-code codehilite">
-<pre><span></span><code>$<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>build
+<pre><span></span><code>$ pip install build
 </code></pre>
 </div>
 
 <p>Then, clone this repository, build, and install the package:</p>
 
 <div class="pdoc-code codehilite">
-<pre><span></span><code>$<span class="w"> </span>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/cmu-transparency/verified_rup.git
-$<span class="w"> </span><span class="nb">cd</span><span class="w"> </span>verified_rup
-$<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>build
-$<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>dist/*.whl
+<pre><span></span><code>$ git clone https://github.com/cmu-transparency/verified_rup.git
+$ <span class="nb">cd</span> verified_rup
+$ python -m build
+$ pip install dist/*.whl
 </code></pre>
 </div>
 
@@ -181,77 +177,68 @@ $<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </sp
 <p>The package provides a command line interface for checking proofs stored in files:</p>
 
 <div class="pdoc-code codehilite">
-<pre><span></span><code>$<span class="w"> </span>drup<span class="w"> </span>--help
-usage:<span class="w"> </span>drup<span class="w"> </span><span class="o">[</span>-h<span class="o">]</span><span class="w"> </span><span class="o">[</span>-d<span class="o">]</span><span class="w"> </span><span class="o">[</span>-v<span class="o">]</span><span class="w"> </span>dimacs<span class="w"> </span>drup
+<pre><span></span><code>$ drup --help
+usage: drup <span class="o">[</span>-h<span class="o">]</span> <span class="o">[</span>-d<span class="o">]</span> <span class="o">[</span>-v<span class="o">]</span> dimacs drup
 
-Checks<span class="w"> </span>DRUP<span class="w"> </span><span class="p">&amp;</span><span class="w"> </span>DRAT<span class="w"> </span>proofs<span class="w"> </span>against<span class="w"> </span>DIMACS<span class="w"> </span>source.<span class="w"> </span>Returns<span class="w"> </span><span class="m">0</span><span class="w"> </span><span class="k">if</span><span class="w"> </span>the<span class="w"> </span>proof<span class="w"> </span>is<span class="w"> </span>valid,<span class="w"> </span>-1<span class="w"> </span><span class="k">if</span><span class="w"> </span>not,<span class="w"> </span>or<span class="w"> </span>a<span class="w"> </span>negative<span class="w"> </span>error<span class="w"> </span>code<span class="w"> </span><span class="k">if</span><span class="w"> </span>the<span class="w"> </span>input<span class="w"> </span>is<span class="w"> </span>invalid.
+Checks DRUP <span class="p">&amp;</span> DRAT proofs against DIMACS source. Returns <span class="m">0</span> <span class="k">if</span> the proof is valid, -1 <span class="k">if</span> not, or a negative error code <span class="k">if</span> the input is invalid.
 
-positional<span class="w"> </span>arguments:
-<span class="w">  </span>dimacs<span class="w">            </span>Path<span class="w"> </span>to<span class="w"> </span>a<span class="w"> </span>DIMACS<span class="w"> </span>CNF<span class="w"> </span>formula
-<span class="w">  </span>drup<span class="w">              </span>Path<span class="w"> </span>to<span class="w"> </span>a<span class="w"> </span>DRUP/DRAT<span class="w"> </span>proof
+positional arguments:
+  dimacs            Path to a DIMACS CNF formula
+  drup              Path to a DRUP/DRAT proof
 
-optional<span class="w"> </span>arguments:
-<span class="w">  </span>-h,<span class="w"> </span>--help<span class="w">        </span>show<span class="w"> </span>this<span class="w"> </span><span class="nb">help</span><span class="w"> </span>message<span class="w"> </span>and<span class="w"> </span><span class="nb">exit</span>
-<span class="w">  </span>-d,<span class="w"> </span>--derivation<span class="w">  </span>Check<span class="w"> </span>each<span class="w"> </span>step,<span class="w"> </span>ignore<span class="w"> </span>absence<span class="w"> </span>of<span class="w"> </span>empty<span class="w"> </span>clause
-<span class="w">  </span>-v,<span class="w"> </span>--verbose<span class="w">     </span>Print<span class="w"> </span>detailed<span class="w"> </span>information<span class="w"> </span>about<span class="w"> </span>failed<span class="w"> </span>checks
+optional arguments:
+  -h, --help        show this <span class="nb">help</span> message and <span class="nb">exit</span>
+  -d, --derivation  Check each step, ignore absence of empty clause
+  -v, --verbose     Print detailed information about failed checks
 
-For<span class="w"> </span>more<span class="w"> </span>information<span class="w"> </span>visit<span class="w"> </span>https://github.com/cmu-transparency/verified_rup
+For more information visit https://github.com/cmu-transparency/verified_rup
 </code></pre>
 </div>
 
 <h3 id="as-a-python-module">As a Python module</h3>
 
-<p>See the documentation for details of the API.
-The primary function is <code><a href="#check_proof">drup.check_proof</a></code>, or alternatively, <code><a href="#check_derivation">drup.check_derivation</a></code> to check each step of the proof, ignoring the absence of an empty clause).</p>
+<p>See the <a href="http://fairlyaccountable.org/verified_rup/drup.html">documentation</a> for details of the API.
+The primary function is <code><a href="#check_proof">drup.check_proof</a></code>, or alternatively, <code><a href="#check_derivation">drup.check_derivation</a></code> to check each step of the proof, ignoring the absence of an empty clause). There are corresponding convenience functions <code><a href="#check_proof_from_strings">check_proof_from_strings</a></code> and <code><a href="#check_proof_from_files">check_proof_from_files</a></code>, similarly for <code><a href="#check_derivation">check_derivation</a></code>.</p>
+
+<p>The following example uses <a href="https://massimolauria.net/cnfgen/">CNFgen</a> to generate a PHP instance,
+and <a href="https://pysathq.github.io/">PySAT</a> to solve it and generate a DRUP proof.
+To illustrate the verbose output given for failed checks, only the first ten clauses of the proof are checked against the proof.</p>
 
 <div class="pdoc-code codehilite">
-<pre><span></span><code><span class="k">def</span> <span class="nf">check_proof</span><span class="p">(</span><span class="n">formula</span> <span class="p">:</span> <span class="n">Cnf</span><span class="p">,</span> <span class="n">proof</span> <span class="p">:</span> <span class="n">Proof</span><span class="p">,</span> <span class="n">verbose</span> <span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CheckerResult</span><span class="p">:</span>
-<span class="w">  </span><span class="sd">&quot;&quot;&quot;Check a sequence of RUP and RAT clauses against a CNF. Inputs are Python iterables</span>
-<span class="sd">  of clauses, where each clause is an iterable of signed Python ints.</span>
+<pre><span></span><code><span class="kn">import</span> <span class="nn">drup</span>
+<span class="kn">import</span> <span class="nn">cnfgen</span>
+<span class="kn">from</span> <span class="nn">pysat.formula</span> <span class="kn">import</span> <span class="n">CNF</span>
+<span class="kn">from</span> <span class="nn">pysat.solvers</span> <span class="kn">import</span> <span class="n">Solver</span>
 
-<span class="sd">  Args:</span>
-<span class="sd">    formula (Cnf): Cnf as an iterable of clauses.</span>
-<span class="sd">    proof (Proof): Iterable of RUP or RAT clauses.</span>
-<span class="sd">    verbose (bool, optional): Return detailed information</span>
-<span class="sd">      if the check fails. Defaults to False.</span>
+<span class="n">dimacs</span> <span class="o">=</span> <span class="n">cnfgen</span><span class="o">.</span><span class="n">BinaryPigeonholePrinciple</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span><span class="o">.</span><span class="n">dimacs</span><span class="p">()</span>
+<span class="n">cnf</span> <span class="o">=</span> <span class="n">CNF</span><span class="p">(</span><span class="n">from_string</span><span class="o">=</span><span class="n">dimacs</span><span class="p">)</span><span class="o">.</span><span class="n">clauses</span>
+<span class="n">g4</span> <span class="o">=</span> <span class="n">Solver</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;g4&#39;</span><span class="p">,</span> <span class="n">with_proof</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">bootstrap_with</span><span class="o">=</span><span class="n">cnf</span><span class="p">)</span>
+<span class="n">g4</span><span class="o">.</span><span class="n">solve</span><span class="p">()</span>
+<span class="n">proof</span> <span class="o">=</span> <span class="p">[[</span><span class="nb">int</span><span class="p">(</span><span class="n">l</span><span class="p">)</span> <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">c</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">)[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]]</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">g4</span><span class="o">.</span><span class="n">get_proof</span><span class="p">()]</span>
 
-<span class="sd">  Returns:</span>
-<span class="sd">    CheckerResult: CheckerResult struct representing the result of the check.</span>
-
-<span class="sd">  Raises:</span>
-<span class="sd">    ValueError: If the formula or proof cannot be formatted.</span>
-<span class="sd">  &quot;&quot;&quot;</span>
+<span class="n"><a href="#check_proof">drup.check_proof</a></span><span class="p">(</span><span class="n">cnf</span><span class="p">[:</span><span class="mi">10</span><span class="p">],</span> <span class="n">proof</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </code></pre>
 </div>
 
-<p>This takes a CNF and Proof as an iterable of iterables of signed integers, and returns a <code><a href="#CheckerResult">CheckerResult</a></code>.</p>
+<p>This gives a <code><a href="#CheckerResult">CheckerResult</a></code> object with the following information:</p>
 
 <div class="pdoc-code codehilite">
-<pre><span></span><code><span class="k">class</span> <span class="nc">CheckerResult</span><span class="p">:</span>
-
-<span class="w">  </span><span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">  Result of a proof check.</span>
-
-<span class="sd">  Attributes:</span>
-
-<span class="sd">    outcome (`Outcome`): The outcome of the check. If the check</span>
-<span class="sd">      succeeded, this will be <a href="#Outcome.VALID">Outcome.VALID</a>. If the check failed,</span>
-<span class="sd">      this will be <a href="#Outcome.INVALID">Outcome.INVALID</a>.</span>
-
-<span class="sd">    steps (`Optional[Cnf]`): Completed proof steps prior to an invalid step, </span>
-<span class="sd">      if the proof was invalid.</span>
-
-<span class="sd">    rup_info (`Optional[RupInfo]`): Information on a failed RUP check,</span>
-<span class="sd">      if the proof was invalid.</span>
-
-<span class="sd">    rat_info (`Optional[RatInfo]`): Information on a failed RAT check,</span>
-<span class="sd">      if the proof was invalid. The RAT clause in this object will</span>
-<span class="sd">      be the same as the RUP clause in `rup_info`.</span>
-<span class="sd">  &#39;&#39;&#39;</span>
+<pre><span></span><code><span class="n">CheckerResult</span><span class="p">(</span>
+    <span class="n"><a href="#Outcome.INVALID">Outcome.INVALID</a></span><span class="p">,</span> 
+    <span class="p">[],</span> 
+    <span class="n">RupInfo</span><span class="p">([</span><span class="mi">4</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">8</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mi">4</span><span class="p">,</span> <span class="o">-</span><span class="mi">6</span><span class="p">,</span> <span class="o">-</span><span class="mi">7</span><span class="p">,</span> <span class="o">-</span><span class="mi">8</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">5</span><span class="p">]),</span> 
+    <span class="n">RatInfo</span><span class="p">(</span>
+        <span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">8</span><span class="p">],</span> 
+        <span class="p">[</span><span class="o">-</span><span class="mi">4</span><span class="p">,</span> <span class="o">-</span><span class="mi">3</span><span class="p">],</span> 
+        <span class="n">RupInfo</span><span class="p">([</span><span class="mi">6</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="o">-</span><span class="mi">3</span><span class="p">],</span> <span class="p">[</span><span class="o">-</span><span class="mi">6</span><span class="p">,</span> <span class="o">-</span><span class="mi">7</span><span class="p">,</span> <span class="o">-</span><span class="mi">8</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="o">-</span><span class="mi">4</span><span class="p">])</span>
+    <span class="p">)</span>
+<span class="p">)</span>
 </code></pre>
 </div>
 
-<p>There are corresponding convenience functions <code><a href="#check_proof_from_strings">check_proof_from_strings</a></code> and <code><a href="#check_proof_from_files">check_proof_from_files</a></code>, similarly for <code><a href="#check_derivation">check_derivation</a></code>.</p>
+<p>The <code><a href="#RupInfo">RupInfo</a></code> component relates that RUP verification failed on the first clause of the proof, <code>4 6 7 8 0</code>, after propagating the literals <code>-4, -6, -7, -8, 3, 5</code>, and failing to find more opposites to propagate.
+Likewise, the <code><a href="#RatInfo">RatInfo</a></code> component relates that RAT verification on this clause failed when checking the pivot on clause <code>-4 -3 0</code>.
+The resolvent of these clauses, <code>6 7 8 -3 0</code>, failed RUP verification after propagating <code>-6 -7 -8 5 3 -4</code>.</p>
 
 <h2 id="performance">Performance</h2>
 
@@ -322,6 +309,91 @@ In the table below, each configuration is run on 10,000 instances, with proofs g
 <h3 id="references">References</h3>
 
 <p><a href="https://openreview.net/forum?id=HJMC_iA5tm">[1]</a> Daniel Selsam, Matthew Lamm, Benedikt Bünz, Percy Liang, Leonardo de Moura, David L. Dill. <em>Learning a SAT Solver from Single-Bit Supervision</em>. International Conference on Learning Representations (ICLR), 2019.</p>
+
+<h2 id="verification">Verification</h2>
+
+<p>The verification can be examined by running <code>src/librupchecker/rup_pure.mlw</code> in Why3, or by checking the Why3 session in <code>src/librupchecker/rup_pure/why3session.xml</code>. 
+The proof was developed using Why3 1.5.1, Alt-Ergo 2.4.0, Z3 4.8.6, and CVC4 1.8.
+Verification has not been attempted with earlier versions of Why3 or the provers.</p>
+
+<p>The primary contract on the proof checker is as follows:</p>
+
+<div class="pdoc-code codehilite">
+<pre><span></span><code><span class="n">requires</span> <span class="o">{</span> <span class="n">no_redundant_clauses</span> <span class="n">cnf</span> <span class="o">/</span><span class="err">\</span> <span class="n">no_trivial_clauses</span> <span class="n">cnf</span> <span class="o">}</span>
+<span class="n">requires</span> <span class="o">{</span> <span class="n">no_redundant_clauses</span> <span class="n">pf</span> <span class="o">/</span><span class="err">\</span> <span class="n">no_trivial_clauses</span> <span class="n">pf</span> <span class="o">}</span>
+<span class="n">ensures</span> <span class="o">{</span> <span class="k">match</span> <span class="n">result</span> <span class="k">with</span>
+            <span class="o">|</span> <span class="nc">Valid</span> <span class="o">-&gt;</span> <span class="n">valid_proof</span> <span class="n">cnf</span> <span class="n">pf</span>
+            <span class="o">|</span> <span class="o">_</span> <span class="o">-&gt;</span> <span class="n">proof_failure</span> <span class="n">orig</span> <span class="n">result</span>
+            <span class="k">end</span> <span class="o">}</span>
+</code></pre>
+</div>
+
+<p>The bindings used by this library take care of removing redundant and trivial clauses.
+The <code>valid_proof</code> predicate is a straightforward translation of DRAT certification requirements.
+A <code>proof_failure</code> result provides additional assurances about the verbose output of the checker.</p>
+
+<div class="pdoc-code codehilite">
+<pre><span></span><code><span class="n">predicate</span> <span class="n">proof_failure</span> <span class="o">(</span><span class="n">cnf</span> <span class="o">:</span> <span class="n">cnf</span><span class="o">)</span> <span class="o">(</span><span class="n">result</span> <span class="o">:</span> <span class="n">result</span><span class="o">)</span> <span class="o">=</span>
+    <span class="k">match</span> <span class="n">result</span> <span class="k">with</span>
+    <span class="o">|</span> <span class="nc">Valid</span> <span class="o">-&gt;</span> <span class="bp">false</span>
+    <span class="o">|</span> <span class="nc">InvalidEmpty</span> <span class="n">steps</span> <span class="n">rup_info</span> <span class="o">-&gt;</span> <span class="n">rup_failure</span> <span class="o">(</span><span class="n">steps</span> <span class="o">++</span> <span class="n">cnf</span><span class="o">)</span> <span class="n">rup_info</span>
+    <span class="o">|</span> <span class="nc">InvalidStep</span> <span class="n">steps</span> <span class="n">rup_info</span> <span class="n">rat_info</span> <span class="o">-&gt;</span> 
+        <span class="n">rup_failure</span> <span class="o">(</span><span class="n">steps</span> <span class="o">++</span> <span class="n">cnf</span><span class="o">)</span> <span class="n">rup_info</span> <span class="o">/</span><span class="err">\</span> <span class="n">rat_failure</span> <span class="o">(</span><span class="n">steps</span> <span class="o">++</span> <span class="n">cnf</span><span class="o">)</span> <span class="n">rat_info</span>
+    <span class="k">end</span>
+</code></pre>
+</div>
+
+<p>An <code>InvalidEmpty</code> result indicates all of the listed <code>steps</code> are valid, but the empty clause was not derived, as witnessed by the provided <code>rup_info</code>.
+This is only returned when all of the steps in the proof are valid except an empty clause at the end.
+The <code>rup_info</code> component ensures that the empty clause is not RUP, and that the unit chain used to conclude this is exhaustive.</p>
+
+<div class="pdoc-code codehilite">
+<pre><span></span><code><span class="n">predicate</span> <span class="n">rup_failure</span> <span class="o">(</span><span class="n">cnf</span> <span class="o">:</span> <span class="n">cnf</span><span class="o">)</span> <span class="o">(</span><span class="n">info</span> <span class="o">:</span> <span class="n">rup_info</span><span class="o">)</span> <span class="o">=</span>
+    <span class="n">not</span> <span class="o">(</span><span class="n">rup</span> <span class="n">cnf</span> <span class="n">info</span><span class="o">.</span><span class="n">rup_clause</span><span class="o">)</span> <span class="o">/</span><span class="err">\</span>
+    <span class="k">match</span> <span class="n">info</span><span class="o">.</span><span class="n">rup_clause</span> <span class="k">with</span>
+    <span class="o">|</span> <span class="nc">Nil</span> <span class="o">-&gt;</span> 
+        <span class="k">let</span> <span class="n">cnf&#39;</span> <span class="o">=</span> <span class="n">bcp</span> <span class="n">cnf</span> <span class="n">info</span><span class="o">.</span><span class="n">chain</span> <span class="k">in</span>
+        <span class="n">is_unit_chain</span> <span class="n">cnf</span> <span class="n">info</span><span class="o">.</span><span class="n">chain</span> <span class="o">/</span><span class="err">\</span> 
+        <span class="n">forall</span> <span class="n">chain&#39;</span> <span class="o">.</span> <span class="n">is_unit_chain</span> <span class="n">cnf&#39;</span> <span class="n">chain&#39;</span> <span class="o">-&gt;</span> 
+                        <span class="n">forall</span> <span class="n">c</span> <span class="o">.</span> <span class="n">mem</span> <span class="n">c</span> <span class="o">(</span><span class="n">bcp</span> <span class="n">cnf&#39;</span> <span class="n">chain&#39;</span><span class="o">)</span> <span class="o">&lt;-&gt;</span> <span class="n">mem</span> <span class="n">c</span> <span class="n">cnf&#39;</span>
+    <span class="o">|</span> <span class="nc">Cons</span> <span class="o">_</span> <span class="o">_</span> <span class="o">-&gt;</span> 
+        <span class="k">let</span> <span class="n">cnf&#39;</span> <span class="o">=</span> <span class="n">bcp</span> <span class="o">(</span><span class="n">cnf</span> <span class="o">++</span> <span class="o">(</span><span class="n">negate_clause</span> <span class="n">info</span><span class="o">.</span><span class="n">rup_clause</span><span class="o">))</span> <span class="n">info</span><span class="o">.</span><span class="n">chain</span> <span class="k">in</span>
+        <span class="n">is_unit_chain</span> <span class="o">(</span><span class="n">cnf</span> <span class="o">++</span> <span class="o">(</span><span class="n">negate_clause</span> <span class="n">info</span><span class="o">.</span><span class="n">rup_clause</span><span class="o">))</span> <span class="n">info</span><span class="o">.</span><span class="n">chain</span> <span class="o">/</span><span class="err">\</span> 
+        <span class="n">forall</span> <span class="n">chain&#39;</span> <span class="o">.</span> <span class="n">is_unit_chain</span> <span class="n">cnf&#39;</span> <span class="n">chain&#39;</span> <span class="o">-&gt;</span> 
+                        <span class="n">forall</span> <span class="n">c</span> <span class="o">.</span> <span class="n">mem</span> <span class="n">c</span> <span class="o">(</span><span class="n">bcp</span> <span class="n">cnf&#39;</span> <span class="n">chain&#39;</span><span class="o">)</span> <span class="o">&lt;-&gt;</span> <span class="n">mem</span> <span class="n">c</span> <span class="n">cnf&#39;</span>
+    <span class="k">end</span>
+</code></pre>
+</div>
+
+<p>An <code>InvalidStep</code> result indicates that the <code>steps</code> are valid up to some non-empty step.
+The next step in the certificate following <code>steps</code> is invalid, as witnessed by the provided <code>rup_info</code> and <code>rat_info</code>.
+In addition to the assurances on <code>rup_info</code> described above, <code>rat_info</code> provides that the identified pivot clause is not RUP.</p>
+
+<div class="pdoc-code codehilite">
+<pre><span></span><code><span class="n">predicate</span> <span class="n">rat_failure</span> <span class="o">(</span><span class="n">cnf</span> <span class="o">:</span> <span class="n">cnf</span><span class="o">)</span> <span class="o">(</span><span class="n">info</span> <span class="o">:</span> <span class="n">rat_info</span><span class="o">)</span> <span class="o">=</span>
+    <span class="n">not</span> <span class="o">(</span><span class="n">rat</span> <span class="n">cnf</span> <span class="n">info</span><span class="o">.</span><span class="n">rat_clause</span><span class="o">)</span> <span class="o">/</span><span class="err">\</span>
+    <span class="k">match</span> <span class="n">info</span><span class="o">.</span><span class="n">rat_clause</span> <span class="k">with</span>
+    <span class="o">|</span> <span class="nc">Nil</span> <span class="o">-&gt;</span> <span class="bp">false</span>
+    <span class="o">|</span> <span class="nc">Cons</span> <span class="n">l</span> <span class="o">_</span> <span class="o">-&gt;</span>
+        <span class="n">mem</span> <span class="n">info</span><span class="o">.</span><span class="n">pivot_clause</span> <span class="o">(</span><span class="n">pivot_clauses</span> <span class="n">cnf</span> <span class="n">l</span><span class="o">)</span> <span class="o">/</span><span class="err">\</span>
+        <span class="n">info</span><span class="o">.</span><span class="n">pivot_info</span><span class="o">.</span><span class="n">rup_clause</span> <span class="o">=</span> <span class="n">resolve</span> <span class="n">info</span><span class="o">.</span><span class="n">rat_clause</span> <span class="n">info</span><span class="o">.</span><span class="n">pivot_clause</span> <span class="n">l</span> <span class="o">/</span><span class="err">\</span>
+        <span class="n">rup_failure</span> <span class="n">cnf</span> <span class="n">info</span><span class="o">.</span><span class="n">pivot_info</span>
+    <span class="k">end</span>
+</code></pre>
+</div>
+
+<p>The derivation checker provides a similar contract, but rather than ensuring <code>valid_proof</code> on success, it provides <code>valid_derivation</code>.</p>
+
+<div class="pdoc-code codehilite">
+<pre><span></span><code><span class="n">predicate</span> <span class="n">valid_derivation</span> <span class="o">(</span><span class="n">cnf</span> <span class="o">:</span> <span class="n">cnf</span><span class="o">)</span> <span class="o">(</span><span class="n">pf</span> <span class="o">:</span> <span class="n">proof</span><span class="o">)</span> <span class="o">=</span>
+    <span class="k">match</span> <span class="n">pf</span> <span class="k">with</span>
+    <span class="o">|</span> <span class="nc">Nil</span> <span class="o">-&gt;</span> <span class="bp">true</span>
+    <span class="o">|</span> <span class="nc">Cons</span> <span class="n">c</span> <span class="n">cs</span> <span class="o">-&gt;</span> <span class="o">(</span><span class="n">rup</span> <span class="n">cnf</span> <span class="n">c</span> <span class="err">\</span><span class="o">/</span> <span class="n">rat</span> <span class="n">cnf</span> <span class="n">c</span><span class="o">)</span> <span class="o">/</span><span class="err">\</span> <span class="n">valid_derivation</span> <span class="o">(</span><span class="nc">Cons</span> <span class="n">c</span> <span class="n">cnf</span><span class="o">)</span> <span class="n">cs</span>
+    <span class="k">end</span>
+</code></pre>
+</div>
+
+<p>This is the same condition as <code>valid_proof</code>, but in the <code>Nil</code> case, the checker does not require that the empty clause is not RUP.</p>
 
 <h2 id="acknowledgements">Acknowledgements</h2>
 
@@ -606,7 +678,7 @@ In the table below, each configuration is run on 10,000 instances, with proofs g
     <a class="headerlink" href="#RupInfo"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="RupInfo-29"><a href="#RupInfo-29"><span class="linenos">29</span></a><span class="k">class</span> <span class="nc">RupInfo</span><span class="p">:</span>
 </span><span id="RupInfo-30"><a href="#RupInfo-30"><span class="linenos">30</span></a>
-</span><span id="RupInfo-31"><a href="#RupInfo-31"><span class="linenos">31</span></a><span class="w">  </span><span class="sd">&#39;&#39;&#39;</span>
+</span><span id="RupInfo-31"><a href="#RupInfo-31"><span class="linenos">31</span></a>  <span class="sd">&#39;&#39;&#39;</span>
 </span><span id="RupInfo-32"><a href="#RupInfo-32"><span class="linenos">32</span></a><span class="sd">  Information on a failed RUP check.</span>
 </span><span id="RupInfo-33"><a href="#RupInfo-33"><span class="linenos">33</span></a>
 </span><span id="RupInfo-34"><a href="#RupInfo-34"><span class="linenos">34</span></a><span class="sd">  **Attributes**:</span>
@@ -672,7 +744,7 @@ In the table below, each configuration is run on 10,000 instances, with proofs g
     <a class="headerlink" href="#RatInfo"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="RatInfo-50"><a href="#RatInfo-50"><span class="linenos">50</span></a><span class="k">class</span> <span class="nc">RatInfo</span><span class="p">:</span>
 </span><span id="RatInfo-51"><a href="#RatInfo-51"><span class="linenos">51</span></a>
-</span><span id="RatInfo-52"><a href="#RatInfo-52"><span class="linenos">52</span></a><span class="w">  </span><span class="sd">&#39;&#39;&#39;</span>
+</span><span id="RatInfo-52"><a href="#RatInfo-52"><span class="linenos">52</span></a>  <span class="sd">&#39;&#39;&#39;</span>
 </span><span id="RatInfo-53"><a href="#RatInfo-53"><span class="linenos">53</span></a><span class="sd">  Information on a failed RAT check.</span>
 </span><span id="RatInfo-54"><a href="#RatInfo-54"><span class="linenos">54</span></a>
 </span><span id="RatInfo-55"><a href="#RatInfo-55"><span class="linenos">55</span></a><span class="sd">  **Attributes**:</span>
@@ -738,7 +810,7 @@ In the table below, each configuration is run on 10,000 instances, with proofs g
     <a class="headerlink" href="#CheckerResult"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="CheckerResult-71"><a href="#CheckerResult-71"><span class="linenos"> 71</span></a><span class="k">class</span> <span class="nc">CheckerResult</span><span class="p">:</span>
 </span><span id="CheckerResult-72"><a href="#CheckerResult-72"><span class="linenos"> 72</span></a>
-</span><span id="CheckerResult-73"><a href="#CheckerResult-73"><span class="linenos"> 73</span></a><span class="w">  </span><span class="sd">&#39;&#39;&#39;</span>
+</span><span id="CheckerResult-73"><a href="#CheckerResult-73"><span class="linenos"> 73</span></a>  <span class="sd">&#39;&#39;&#39;</span>
 </span><span id="CheckerResult-74"><a href="#CheckerResult-74"><span class="linenos"> 74</span></a><span class="sd">  Result of a proof check.</span>
 </span><span id="CheckerResult-75"><a href="#CheckerResult-75"><span class="linenos"> 75</span></a>
 </span><span id="CheckerResult-76"><a href="#CheckerResult-76"><span class="linenos"> 76</span></a><span class="sd">  **Attributes**:</span>
@@ -832,7 +904,7 @@ In the table below, each configuration is run on 10,000 instances, with proofs g
     </div>
     <a class="headerlink" href="#check_proof"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="check_proof-267"><a href="#check_proof-267"><span class="linenos">267</span></a><span class="k">def</span> <span class="nf">check_proof</span><span class="p">(</span><span class="n">formula</span> <span class="p">:</span> <span class="n">Cnf</span><span class="p">,</span> <span class="n">proof</span> <span class="p">:</span> <span class="n">Proof</span><span class="p">,</span> <span class="n">verbose</span> <span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CheckerResult</span><span class="p">:</span>
-</span><span id="check_proof-268"><a href="#check_proof-268"><span class="linenos">268</span></a><span class="w">  </span><span class="sd">&quot;&quot;&quot;Check a sequence of RUP and RAT clauses against a CNF. Inputs are Python iterables</span>
+</span><span id="check_proof-268"><a href="#check_proof-268"><span class="linenos">268</span></a>  <span class="sd">&quot;&quot;&quot;Check a sequence of RUP and RAT clauses against a CNF. Inputs are Python iterables</span>
 </span><span id="check_proof-269"><a href="#check_proof-269"><span class="linenos">269</span></a><span class="sd">  of clauses, where each clause is an iterable of signed Python ints.</span>
 </span><span id="check_proof-270"><a href="#check_proof-270"><span class="linenos">270</span></a>
 </span><span id="check_proof-271"><a href="#check_proof-271"><span class="linenos">271</span></a><span class="sd">  **Args:**</span>
@@ -885,7 +957,7 @@ of clauses, where each clause is an iterable of signed Python ints.</p>
     </div>
     <a class="headerlink" href="#check_proof_from_files"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="check_proof_from_files-318"><a href="#check_proof_from_files-318"><span class="linenos">318</span></a><span class="k">def</span> <span class="nf">check_proof_from_files</span><span class="p">(</span><span class="n">formula_file</span> <span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">proof_file</span> <span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">verbose</span> <span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CheckerResult</span><span class="p">:</span>
-</span><span id="check_proof_from_files-319"><a href="#check_proof_from_files-319"><span class="linenos">319</span></a><span class="w">  </span><span class="sd">&quot;&quot;&quot;Check a sequence of RUP and RAT clauses against a CNF.</span>
+</span><span id="check_proof_from_files-319"><a href="#check_proof_from_files-319"><span class="linenos">319</span></a>  <span class="sd">&quot;&quot;&quot;Check a sequence of RUP and RAT clauses against a CNF.</span>
 </span><span id="check_proof_from_files-320"><a href="#check_proof_from_files-320"><span class="linenos">320</span></a>
 </span><span id="check_proof_from_files-321"><a href="#check_proof_from_files-321"><span class="linenos">321</span></a><span class="sd">  **Args:**</span>
 </span><span id="check_proof_from_files-322"><a href="#check_proof_from_files-322"><span class="linenos">322</span></a><span class="sd">    formula_file (str): Path to a file containing a CNF in DIMACS format.</span>
@@ -939,7 +1011,7 @@ of clauses, where each clause is an iterable of signed Python ints.</p>
     </div>
     <a class="headerlink" href="#check_proof_from_strings"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="check_proof_from_strings-287"><a href="#check_proof_from_strings-287"><span class="linenos">287</span></a><span class="k">def</span> <span class="nf">check_proof_from_strings</span><span class="p">(</span><span class="n">formula</span> <span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">proof</span> <span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">verbose</span> <span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CheckerResult</span><span class="p">:</span>
-</span><span id="check_proof_from_strings-288"><a href="#check_proof_from_strings-288"><span class="linenos">288</span></a><span class="w">  </span><span class="sd">&quot;&quot;&quot;Check a sequence of RUP and RAT clauses against a CNF.</span>
+</span><span id="check_proof_from_strings-288"><a href="#check_proof_from_strings-288"><span class="linenos">288</span></a>  <span class="sd">&quot;&quot;&quot;Check a sequence of RUP and RAT clauses against a CNF.</span>
 </span><span id="check_proof_from_strings-289"><a href="#check_proof_from_strings-289"><span class="linenos">289</span></a>
 </span><span id="check_proof_from_strings-290"><a href="#check_proof_from_strings-290"><span class="linenos">290</span></a><span class="sd">  **Args:**</span>
 </span><span id="check_proof_from_strings-291"><a href="#check_proof_from_strings-291"><span class="linenos">291</span></a><span class="sd">    formula (str): Cnf as a string in DIMACS format. The header</span>
@@ -1001,7 +1073,7 @@ of clauses, where each clause is an iterable of signed Python ints.</p>
     </div>
     <a class="headerlink" href="#check_derivation"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="check_derivation-402"><a href="#check_derivation-402"><span class="linenos">402</span></a><span class="k">def</span> <span class="nf">check_derivation</span><span class="p">(</span><span class="n">formula</span> <span class="p">:</span> <span class="n">Cnf</span><span class="p">,</span> <span class="n">derivation</span> <span class="p">:</span> <span class="n">Proof</span><span class="p">,</span> <span class="n">verbose</span> <span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CheckerResult</span><span class="p">:</span>
-</span><span id="check_derivation-403"><a href="#check_derivation-403"><span class="linenos">403</span></a><span class="w">  </span><span class="sd">&quot;&quot;&quot;Check a sequence of RUP and RAT clauses against a CNF. Inputs are Python iterables</span>
+</span><span id="check_derivation-403"><a href="#check_derivation-403"><span class="linenos">403</span></a>  <span class="sd">&quot;&quot;&quot;Check a sequence of RUP and RAT clauses against a CNF. Inputs are Python iterables</span>
 </span><span id="check_derivation-404"><a href="#check_derivation-404"><span class="linenos">404</span></a><span class="sd">  of clauses, where each clause is an iterable of signed Python ints.</span>
 </span><span id="check_derivation-405"><a href="#check_derivation-405"><span class="linenos">405</span></a>
 </span><span id="check_derivation-406"><a href="#check_derivation-406"><span class="linenos">406</span></a><span class="sd">  **Args:**</span>
@@ -1060,7 +1132,7 @@ of clauses, where each clause is an iterable of signed Python ints.</p>
     </div>
     <a class="headerlink" href="#check_derivation_from_files"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="check_derivation_from_files-461"><a href="#check_derivation_from_files-461"><span class="linenos">461</span></a><span class="k">def</span> <span class="nf">check_derivation_from_files</span><span class="p">(</span><span class="n">formula_file</span> <span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">derivation_file</span> <span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">verbose</span> <span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CheckerResult</span><span class="p">:</span>
-</span><span id="check_derivation_from_files-462"><a href="#check_derivation_from_files-462"><span class="linenos">462</span></a><span class="w">  </span><span class="sd">&quot;&quot;&quot;Check a sequence of RUP and RAT clauses against a CNF.</span>
+</span><span id="check_derivation_from_files-462"><a href="#check_derivation_from_files-462"><span class="linenos">462</span></a>  <span class="sd">&quot;&quot;&quot;Check a sequence of RUP and RAT clauses against a CNF.</span>
 </span><span id="check_derivation_from_files-463"><a href="#check_derivation_from_files-463"><span class="linenos">463</span></a>
 </span><span id="check_derivation_from_files-464"><a href="#check_derivation_from_files-464"><span class="linenos">464</span></a><span class="sd">  **Args:**</span>
 </span><span id="check_derivation_from_files-465"><a href="#check_derivation_from_files-465"><span class="linenos">465</span></a><span class="sd">    </span>
@@ -1126,7 +1198,7 @@ of clauses, where each clause is an iterable of signed Python ints.</p>
     </div>
     <a class="headerlink" href="#check_derivation_from_strings"></a>
             <div class="pdoc-code codehilite"><pre><span></span><span id="check_derivation_from_strings-425"><a href="#check_derivation_from_strings-425"><span class="linenos">425</span></a><span class="k">def</span> <span class="nf">check_derivation_from_strings</span><span class="p">(</span><span class="n">formula</span> <span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">derivation</span> <span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">verbose</span> <span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CheckerResult</span><span class="p">:</span>
-</span><span id="check_derivation_from_strings-426"><a href="#check_derivation_from_strings-426"><span class="linenos">426</span></a><span class="w">  </span><span class="sd">&quot;&quot;&quot;Check a sequence of RUP and RAT clauses against a CNF.</span>
+</span><span id="check_derivation_from_strings-426"><a href="#check_derivation_from_strings-426"><span class="linenos">426</span></a>  <span class="sd">&quot;&quot;&quot;Check a sequence of RUP and RAT clauses against a CNF.</span>
 </span><span id="check_derivation_from_strings-427"><a href="#check_derivation_from_strings-427"><span class="linenos">427</span></a>
 </span><span id="check_derivation_from_strings-428"><a href="#check_derivation_from_strings-428"><span class="linenos">428</span></a><span class="sd">  **Args:**</span>
 </span><span id="check_derivation_from_strings-429"><a href="#check_derivation_from_strings-429"><span class="linenos">429</span></a><span class="sd">    formula (str): Cnf as a string in DIMACS format. The header</span>
