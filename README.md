@@ -57,7 +57,7 @@ For more information visit https://github.com/cmu-transparency/verified_rup
 
 ### As a Python module
 
-See the [documentation](http://fairlyaccountable.org/verified_rup/drup.html) for details of the API.
+See the [documentation](https://fairlyaccountable.org/verified_rup/drup.html) for details of the API.
 The primary function is `drup.check_proof`, or alternatively, `drup.check_derivation` to check each step of the proof, ignoring the absence of an empty clause). There are corresponding convenience functions `check_proof_from_strings` and `check_proof_from_files`, similarly for `check_derivation`.
 
 The following example uses [CNFgen](https://massimolauria.net/cnfgen/) to generate a PHP instance,
