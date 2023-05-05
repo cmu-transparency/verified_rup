@@ -1091,8 +1091,27 @@ let rec lemma prop_preserves_fixed (cnf : cnf) (l l' : lit) =
 predicate implied (cnf : cnf) (c : clause) =
     forall rho . cnf_sat_with rho cnf -> clause_sat_with rho c
 
+predicate subsumes (c c' : clause) =
+  forall l . mem l c -> mem l c'
+
 predicate equisat (cnf cnf' : cnf) =
     (exists rho . cnf_sat_with rho cnf) <-> (exists rho . cnf_sat_with rho cnf')
+
+let lemma subsumed_equisat (cnf : cnf) (c c' : clause) =
+  requires { mem c cnf }
+  requires { subsumes c c' }
+  ensures { equisat cnf (Cons c' cnf) }
+  if pure { exists rho . cnf_sat_with rho cnf } then (
+    let rho = any valuation ensures { cnf_sat_with result cnf } in
+    let l = any lit ensures { mem result c /\ Map.get rho result.var = result.sign } in
+    assert { mem l c' } ;
+    assert { clause_sat_with rho c' } ;
+    assert { cnf_sat_with rho (Cons c' cnf) }
+  ) ;
+  if pure { exists rho . cnf_sat_with rho (Cons c' cnf) } then (
+    let rho = any valuation ensures { cnf_sat_with result (Cons c' cnf) } in
+    assert { cnf_sat_with rho cnf } 
+  ) 
 
 let lemma implied_implies_equisat (cnf : cnf) (c : clause) =
     requires { implied cnf c }
@@ -1509,12 +1528,12 @@ let rec do_bcp (cnf : cnf) (prop : list lit) (ghost poss_lits : Fset.fset lit) :
                 match chain' with
                 | Nil -> 
                     (* This is an easy contradiction, because we would have conflict = true 
-                    * if the empty clause were already present. *)
+                     * if the empty clause were already present. *)
                     assert { mem Nil (bcp (unit_prop l cnf) Nil) by mem Nil (unit_prop l cnf) } ; absurd
                 | Cons l' ls' -> 
                     if pure { l = l' } then (
                         (* Also straightforward, because we already chose to propagate l,
-                        * so we would have gottent conflict = true by induction. *)
+                         * so we would have gottent conflict = true by induction. *)
                         assert { mem Nil (bcp (unit_prop l cnf) ls') } ;
                         absurd
                     ) ;
@@ -1720,19 +1739,19 @@ let rec check_derivation (cnf : cnf) (pf : proof) (steps : cnf) (ghost orig : cn
     variant { pf }
     match pf with
     | Nil -> Valid
-	| Cons c Nil -> 
-		match check_rup cnf c with
-		| None -> Valid
-		| Some rup_info -> 
-			match c with
-			| Nil -> InvalidEmpty steps rup_info
-			| _ -> 
-				match check_rat cnf c with
-				| None -> Valid
-				| Some rat_info -> InvalidStep steps rup_info rat_info
-				end
-			end
-		end
+  | Cons c Nil -> 
+    match check_rup cnf c with
+    | None -> Valid
+    | Some rup_info -> 
+      match c with
+      | Nil -> InvalidEmpty steps rup_info
+      | _ -> 
+        match check_rat cnf c with
+        | None -> Valid
+        | Some rat_info -> InvalidStep steps rup_info rat_info
+        end
+      end
+    end
     | Cons c cs -> 
         match check_rup cnf c with
         | None -> check_derivation (Cons c cnf) cs (Cons c steps) orig
@@ -1776,5 +1795,67 @@ let rec remove_redundant_clauses (cnf : cnf) : cnf =
             cnf'
         )
     end
+
+let rec does_subsume (c c' : clause) =
+  ensures { result <-> subsumes c c' }
+  variant { c }
+  match c with
+  | Nil -> true
+  | Cons l ls -> do_mem l c' lit_eq && does_subsume ls c'
+  end
+  
+let rec remove_subsumed (c : clause) (cnf : cnf) : cnf =
+  ensures { forall c' . mem c' result <-> 
+        mem c' cnf /\ not (subsumes c c') }
+  variant { cnf }
+  match cnf with
+  | Nil -> Nil
+  | Cons c' cs -> 
+    if does_subsume c c' then remove_subsumed c cs
+    else Cons c' (remove_subsumed c cs)
+  end
+
+let extend_and_simplify (cnf : cnf) (c : clause) : cnf = 
+  requires { no_redundant_clauses cnf /\ no_trivial_clauses cnf }
+  requires { not (clause_redundant c) /\ not (clause_trivial c) }
+  ensures { implied cnf c -> (forall rho . cnf_sat_with rho result <-> cnf_sat_with rho cnf) }
+  ensures { rat cnf c -> equisat cnf result }
+  let cnf' = remove_subsumed c cnf in
+  let cnf'' = Cons c cnf' in
+  if pure { implied cnf c } then (
+    if pure { exists rho . cnf_sat_with rho cnf'' /\ not (cnf_sat_with rho cnf) } then (
+      let rho = any valuation ensures { cnf_sat_with result cnf'' /\ not (cnf_sat_with result cnf) } in
+      let c' = any clause ensures { mem result cnf /\ not (clause_sat_with rho result) } in
+      assert { not (mem c' cnf'') } ;
+      assert { subsumes c c' } ;
+      let l = any lit ensures { mem result c /\ Map.get rho result.var = result.sign
+                                by clause_sat_with rho c } in
+      assert { mem l c' } ;
+      absurd
+    )
+  ) ;
+  if pure { rat cnf c } then (
+    if pure { (exists rho . cnf_sat_with rho cnf'') /\ not (exists rho . cnf_sat_with rho cnf) } then (
+      let rho = any valuation ensures { cnf_sat_with result cnf'' /\ not (cnf_sat_with result cnf) } in
+      let c' = any clause ensures { mem result cnf /\ not (clause_sat_with rho result) } in
+      assert { not (mem c' cnf'') } ;
+      assert { subsumes c c' } ;
+      let l = any lit ensures { mem result c /\ Map.get rho result.var = result.sign
+                                by clause_sat_with rho c } in
+      assert { mem l c' } ;
+      absurd
+    ) ;
+    if pure { not (exists rho . cnf_sat_with rho cnf'') /\ (exists rho . cnf_sat_with rho cnf) } then (
+      let rho = any valuation ensures { cnf_sat_with result (Cons c cnf) /\ not (cnf_sat_with result cnf'') 
+                                        by equisat cnf (Cons c cnf) } in
+      let c' = any clause ensures { mem result cnf'' /\ not (clause_sat_with rho result) } in
+      assert { not (mem c' cnf) } ;
+      assert { c' = c } ;
+      absurd
+    )
+  ) ;
+  let ghost lits = cnf_lits cnf'' in
+  let _, cnf, _ = do_bcp cnf'' Nil lits in
+  cnf
 
 end

@@ -75,9 +75,9 @@ let () = seal struct_result
 
 let of_lit l = 
   let l_t = make lit in
-  let root = Root.create l_t in
+  (* let root = Root.create l_t in *)
   setf l_t l_var l.Rup.var1 ;
-  setf l_t l_root root ;
+  (* setf l_t l_root root ; *)
   if l.Rup.sign then setf l_t l_sign 1 else setf l_t l_sign 0 ;
   l_t
 
@@ -92,11 +92,11 @@ let to_lit (l : lit) : Rup.lit =
 let of_clause (c : Rup.lit list) =
   let c_t = make clause in
   let o = CArray.make lit (List.length c) in
-  let root = Root.create o in
+  (* let root = Root.create o in *)
   List.iteri (fun i -> fun x -> CArray.set o i (of_lit x)) c ;
   setf c_t c_lits (CArray.start o) ;
   setf c_t c_len (List.length c) ;
-  setf c_t c_root root ;
+  (* setf c_t c_root root ; *)
   c_t
 
 let free_clause c =
@@ -112,11 +112,11 @@ let to_clause (c : clause) : Rup.clause =
 let of_chain c =
   let c_t = make chain in
   let o = CArray.make lit (List.length c) in
-  let root = Root.create o in
+  (* let root = Root.create o in *)
   List.iteri (fun i -> fun x -> CArray.set o i (of_lit x)) c ;
   setf c_t ch_lits (CArray.start o) ;
   setf c_t ch_len (List.length c) ;
-  setf c_t ch_root root ;
+  (* setf c_t ch_root root ; *)
   c_t
 
 let free_chain c =
@@ -128,17 +128,18 @@ let free_chain c =
 let of_cnf f =
   let cnf_t = make cnf in
   let o = CArray.make clause (List.length f) in
-  let root = Root.create o in
+  (* let root = Root.create o in *)
   List.iteri (fun i -> fun x -> CArray.set o i (of_clause x)) f ;
   setf cnf_t cn_clauses (CArray.start o) ;
   setf cnf_t cn_len (List.length f) ;
-  setf cnf_t cn_root root ;
+  (* setf cnf_t cn_root root ; *)
   cnf_t
 
 let free_cnf c =
-  let root = getf c cn_root in
-  let clause_arr = CArray.from_ptr (getf c cn_clauses) (getf c cn_len) in
-  List.iter free_clause (CArray.to_list clause_arr) ;
+  let cnf = !@c in
+  let root = getf cnf cn_root in
+  (* let clause_arr = CArray.from_ptr (getf !@c cn_clauses) (getf !@c cn_len) in
+  List.iter free_clause (CArray.to_list clause_arr) ; *)
   Root.release root
 
 let of_rup_info info =
@@ -247,7 +248,6 @@ let check_derivation cnf pf =
   | Rup.InvalidEmpty (steps, info) -> 
     setf result_t r_valid 0 ; 
     setf result_t r_steps (of_cnf steps) ;
-    (* print_clause info.Rup.rup_clause ; *)
     setf result_t r_rup_info (of_rup_info info) ;
     let result_p = Ctypes.allocate result result_t in
     let root = Root.create result_p in
@@ -319,6 +319,29 @@ let check_derivation_fast cnf pf =
     setf !@result_p r_root root ;
     result_p
 
+let remove_subsumed clause_p cnf_p =
+  let cnf_arr = CArray.from_ptr (getf !@cnf_p cn_clauses) (getf !@cnf_p cn_len) in
+  let cnf_t = List.map to_clause (CArray.to_list cnf_arr) in
+  let clause_t = to_clause !@clause_p in
+  let cnf_t = Rup.remove_subsumed clause_t cnf_t in
+  let cnf_struct = of_cnf cnf_t in
+  let cnf_p = Ctypes.allocate cnf cnf_struct in
+  let root = Root.create cnf_p in
+  setf !@cnf_p cn_root root ;
+  cnf_p
+
+let extend_and_simplify cnf_p clause_p =
+  let cnf_arr = CArray.from_ptr (getf !@cnf_p cn_clauses) (getf !@cnf_p cn_len) in
+  let cnf_t = List.map to_clause (CArray.to_list cnf_arr) in
+  let clause_arr = CArray.from_ptr (getf !@clause_p cn_clauses) (getf !@clause_p cn_len) in
+  let clause_t = to_clause (CArray.get clause_arr 0) in
+  let cnf_t = Rup.extend_and_simplify cnf_t clause_t in
+  let cnf_struct = of_cnf cnf_t in
+  let cnf_p = Ctypes.allocate cnf cnf_struct in
+  let root = Root.create cnf_p in
+  setf !@cnf_p cn_root root ;
+  cnf_p
+
 module Stubs(I: Cstubs_inverted.INTERNAL) = 
 struct
 
@@ -340,6 +363,9 @@ struct
   let () = I.internal "check_derivation" (ptr cnf @-> ptr cnf @-> returning (ptr result)) check_derivation
   let () = I.internal "check_fast" (ptr cnf @-> ptr cnf @-> returning (ptr result)) check_fast
   let () = I.internal "check_derivation_fast" (ptr cnf @-> ptr cnf @-> returning (ptr result)) check_derivation_fast
+  let () = I.internal "remove_subsumed" (ptr clause @-> ptr cnf @-> returning (ptr cnf)) remove_subsumed
+  let () = I.internal "extend_and_simplify" (ptr cnf @-> ptr cnf @-> returning (ptr cnf)) extend_and_simplify
+  let () = I.internal "free_cnf" (ptr cnf @-> returning void) free_cnf
   let () = I.internal "free_rup_info" (ptr rup_info @-> returning void) free_rup_info
   let () = I.internal "free_rat_info" (ptr rat_info @-> returning void) free_rat_info
   let () = I.internal "free_result" (ptr result @-> returning void) free_result

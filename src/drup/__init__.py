@@ -76,6 +76,8 @@ _checker.check_fast.argtypes = [ctypes.POINTER(_Cnf_struct), ctypes.POINTER(_Cnf
 _checker.check_fast.restype = ctypes.POINTER(_Result_struct)
 _checker.check_derivation_fast.argtypes = [ctypes.POINTER(_Cnf_struct), ctypes.POINTER(_Cnf_struct)]
 _checker.check_derivation_fast.restype = ctypes.POINTER(_Result_struct)
+_checker.extend_and_simplify.argtypes = [ctypes.POINTER(_Cnf_struct), ctypes.POINTER(_Cnf_struct)]
+_checker.extend_and_simplify.restype = ctypes.POINTER(_Cnf_struct)
 _checker.free_rup_info.argtypes = [ctypes.POINTER(_Rupinfo_struct)]
 _checker.free_rat_info.argtypes = [ctypes.POINTER(_Ratinfo_struct)]
 _checker.free_result.argtypes = [ctypes.POINTER(_Result_struct)]
@@ -117,6 +119,7 @@ check_proof_from_strings = drup.wrappers.check_proof_from_strings
 check_derivation = drup.wrappers.check_derivation
 check_derivation_from_files = drup.wrappers.check_derivation_from_files
 check_derivation_from_strings = drup.wrappers.check_derivation_from_strings
+extend_and_simplify = drup.wrappers.extend_and_simplify
 
 __all__ = [
   'Lit',
@@ -134,4 +137,5 @@ __all__ = [
   'check_derivation',
   'check_derivation_from_files',
   'check_derivation_from_strings',
+  'extend_and_simplify'
 ]

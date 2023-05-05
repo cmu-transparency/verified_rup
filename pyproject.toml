@@ -10,7 +10,6 @@ authors = [
 ]
 description = "Checks DRUP proofs against DIMACS source. Extracted from verified Why3 code."
 readme = "README.md"
-documentation = "https://fairlyaccountable.org/verified_rup/drup.html"
 requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -24,3 +23,4 @@ classifiers = [
 [project.urls]
 "Homepage" = "https://github.com/cmu-transparency/verified_rup"
 "Bug Tracker" = "https://github.com/cmu-transparency/verified_rup/issues"
+"Documentation" = "https://fairlyaccountable.org/verified_rup/drup.html"
