@@ -184,3 +184,6 @@ cython_debug/
 
 .pypi
 *.bak
+
+.fuse_hidden*
+why3shapes.gz

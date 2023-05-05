@@ -75,9 +75,9 @@ let () = seal struct_result
 
 let of_lit l = 
   let l_t = make lit in
-  (* let root = Root.create l_t in *)
+  let root = Root.create l_t in
   setf l_t l_var l.Rup.var1 ;
-  (* setf l_t l_root root ; *)
+  setf l_t l_root root ;
   if l.Rup.sign then setf l_t l_sign 1 else setf l_t l_sign 0 ;
   l_t
 
@@ -92,11 +92,11 @@ let to_lit (l : lit) : Rup.lit =
 let of_clause (c : Rup.lit list) =
   let c_t = make clause in
   let o = CArray.make lit (List.length c) in
-  (* let root = Root.create o in *)
+  let root = Root.create o in
   List.iteri (fun i -> fun x -> CArray.set o i (of_lit x)) c ;
   setf c_t c_lits (CArray.start o) ;
   setf c_t c_len (List.length c) ;
-  (* setf c_t c_root root ; *)
+  setf c_t c_root root ;
   c_t
 
 let free_clause c =
@@ -112,11 +112,11 @@ let to_clause (c : clause) : Rup.clause =
 let of_chain c =
   let c_t = make chain in
   let o = CArray.make lit (List.length c) in
-  (* let root = Root.create o in *)
+  let root = Root.create o in
   List.iteri (fun i -> fun x -> CArray.set o i (of_lit x)) c ;
   setf c_t ch_lits (CArray.start o) ;
   setf c_t ch_len (List.length c) ;
-  (* setf c_t ch_root root ; *)
+  setf c_t ch_root root ;
   c_t
 
 let free_chain c =
@@ -138,8 +138,8 @@ let of_cnf f =
 let free_cnf c =
   let cnf = !@c in
   let root = getf cnf cn_root in
-  (* let clause_arr = CArray.from_ptr (getf !@c cn_clauses) (getf !@c cn_len) in
-  List.iter free_clause (CArray.to_list clause_arr) ; *)
+  let clause_arr = CArray.from_ptr (getf !@c cn_clauses) (getf !@c cn_len) in
+  List.iter free_clause (CArray.to_list clause_arr) ;
   Root.release root
 
 let of_rup_info info =
