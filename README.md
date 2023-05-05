@@ -16,7 +16,7 @@ $ pip install drup
 Otherwise, you need to have OCaml (>= 4.12), Ctypes (>=0.20), Why3 (>= 1.5.1), and Dune (>=2.9.3) installed.
 The most straightforward way to install these is to use [opam](https://opam.ocaml.org/doc/Install.html), which is available in most package systems, and then install Why3 and Dune (a sufficiently recent version of OCaml should already be installed with Opam): 
 ```bash
-$ opam install why3 dune
+$ opam install why3 dune ctypes
 ```
 If you do not intend to check the verification of the library or develop it further, then you do not need to install Why3's IDE or any of the solvers that it supports.
 
