@@ -419,11 +419,13 @@ def _check_derivation_from_structs(
   if verbose:
     result = _checker.check_derivation(ctypes.byref(formula), ctypes.byref(derivation)).contents
     if result.valid > 0:
+      tauts = [Tautology.RUP if result.tautologies[i] == 0 else Tautology.RAT for i in range(result.tautologies_len)]
       _checker.free_result(result)
-      return CheckerResult(Outcome.VALID, None, None, None)
+      return CheckerResult(Outcome.VALID, tauts, None, None, None)
     else:
       res = CheckerResult(
               Outcome.INVALID,
+              None
               _struct_to_cnf(result.steps),
               RupInfo(
                 _struct_to_clause(result.rup_info.clause),
@@ -449,10 +451,10 @@ def _check_derivation_from_structs(
     result = _checker.check_derivation_fast(ctypes.byref(formula), ctypes.byref(derivation)).contents
     if result.valid > 0:
       _checker.free_result(result)
-      return CheckerResult(Outcome.VALID, None, None, None)
+      return CheckerResult(Outcome.VALID, None, None, None, None)
     else:
       _checker.free_result(result)
-      return CheckerResult(Outcome.INVALID, None, None, None)
+      return CheckerResult(Outcome.INVALID, None, None, None, None)
 
 def check_derivation(formula : Cnf, derivation : Proof, verbose : bool = False) -> CheckerResult:
   """Check a sequence of RUP and RAT clauses against a CNF. Inputs are Python iterables
