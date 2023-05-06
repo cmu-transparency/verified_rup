@@ -67,11 +67,18 @@ let struct_result : result_t structure typ = structure "result_t"
 let result = typedef struct_result "cresult"
 let (--) s f = field struct_result s f
 let r_valid = "valid" -- int
+let r_tauts = "tautologies" -- ptr int
+let r_tauts_len = "tautologies_len" -- int
 let r_steps = "steps" -- cnf
 let r_rup_info = "rup_info" -- rup_info
 let r_rat_info = "rat_info" -- rat_info
 let r_root = "root" -- ptr void
 let () = seal struct_result
+
+let of_tautology t =
+  match t with
+  | Rup.Rup -> 0
+  | Rup.Rat -> 1
 
 let of_lit l = 
   let l_t = make lit in
@@ -128,11 +135,9 @@ let free_chain c =
 let of_cnf f =
   let cnf_t = make cnf in
   let o = CArray.make clause (List.length f) in
-  (* let root = Root.create o in *)
   List.iteri (fun i -> fun x -> CArray.set o i (of_clause x)) f ;
   setf cnf_t cn_clauses (CArray.start o) ;
   setf cnf_t cn_len (List.length f) ;
-  (* setf cnf_t cn_root root ; *)
   cnf_t
 
 let free_cnf c =
@@ -205,9 +210,21 @@ let check cnf pf =
   let cnf = Rup.remove_redundant_clauses cnf in
   let pf = Rup.remove_redundant_clauses pf in
   let result_t = make result in
-  match Rup.check_proof cnf pf [] with
-  | Rup.Valid -> 
+  match Rup.check_proof cnf pf [] [] with
+  | Rup.Valid [] -> 
     setf result_t r_valid 1 ; 
+    setf result_t r_tauts Ctypes.(coerce (ptr void) (ptr int) null) ;
+    setf result_t r_tauts_len 0 ;
+    let result_p = Ctypes.allocate result result_t in
+    let root = Root.create result_p in
+    setf !@result_p r_root root ;
+    result_p
+  | Rup.Valid tautologies -> 
+    let taut_arr = CArray.make int (List.length tautologies) in
+    List.iteri (fun i -> fun x -> CArray.set taut_arr i (of_tautology x)) tautologies ;
+    setf result_t r_valid 1 ; 
+    setf result_t r_tauts (CArray.start taut_arr) ;
+    setf result_t r_tauts_len (List.length tautologies) ;
     let result_p = Ctypes.allocate result result_t in
     let root = Root.create result_p in
     setf !@result_p r_root root ;
@@ -238,9 +255,21 @@ let check_derivation cnf pf =
   let cnf = Rup.remove_redundant_clauses cnf in
   let pf = Rup.remove_redundant_clauses pf in
   let result_t = make result in
-  match Rup.check_derivation cnf pf [] with
-  | Rup.Valid -> 
+  match Rup.check_derivation cnf pf [] [] with
+  | Rup.Valid [] -> 
     setf result_t r_valid 1 ; 
+    setf result_t r_tauts Ctypes.(coerce (ptr void) (ptr int) null) ;
+    setf result_t r_tauts_len 0 ;
+    let result_p = Ctypes.allocate result result_t in
+    let root = Root.create result_p in
+    setf !@result_p r_root root ;
+    result_p
+  | Rup.Valid tautologies -> 
+    let taut_arr = CArray.make int (List.length tautologies) in
+    List.iteri (fun i -> fun x -> CArray.set taut_arr i (of_tautology x)) tautologies ;
+    setf result_t r_valid 1 ; 
+    setf result_t r_tauts (CArray.start taut_arr) ;
+    setf result_t r_tauts_len (List.length tautologies) ;
     let result_p = Ctypes.allocate result result_t in
     let root = Root.create result_p in
     setf !@result_p r_root root ;
@@ -271,8 +300,8 @@ let check_fast cnf pf =
   let cnf = Rup.remove_redundant_clauses cnf in
   let pf = Rup.remove_redundant_clauses pf in
   let result_t = make result in
-  match Rup.check_proof cnf pf [] with
-  | Rup.Valid -> 
+  match Rup.check_proof cnf pf [] [] with
+  | Rup.Valid _ -> 
     setf result_t r_valid 1 ; 
     let result_p = Ctypes.allocate result result_t in
     let root = Root.create result_p in
@@ -299,8 +328,8 @@ let check_derivation_fast cnf pf =
   let cnf = Rup.remove_redundant_clauses cnf in
   let pf = Rup.remove_redundant_clauses pf in
   let result_t = make result in
-  match Rup.check_derivation cnf pf [] with
-  | Rup.Valid -> 
+  match Rup.check_derivation cnf pf [] [] with
+  | Rup.Valid _ -> 
     setf result_t r_valid 1 ; 
     let result_p = Ctypes.allocate result result_t in
     let root = Root.create result_p in

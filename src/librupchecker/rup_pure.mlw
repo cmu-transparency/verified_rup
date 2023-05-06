@@ -1556,7 +1556,8 @@ let rec do_bcp (cnf : cnf) (prop : list lit) (ghost poss_lits : Fset.fset lit) :
 
 type rup_info = { rup_clause : clause ; chain : chain }
 type rat_info = { rat_clause : clause ; pivot_clause : clause ; pivot_info : rup_info }
-type result = Valid | InvalidEmpty cnf rup_info | InvalidStep cnf rup_info rat_info
+type tautology = Rup | Rat
+type result = Valid (list tautology) | InvalidEmpty cnf rup_info | InvalidStep cnf rup_info rat_info
 
 predicate rup_failure (cnf : cnf) (info : rup_info) =
     not (rup cnf info.rup_clause) /\
@@ -1585,7 +1586,7 @@ predicate rat_failure (cnf : cnf) (info : rat_info) =
 
 predicate proof_failure (cnf : cnf) (result : result) =
     match result with
-    | Valid -> false
+    | Valid _ -> false
     | InvalidEmpty steps rup_info -> rup_failure (steps ++ cnf) rup_info
     | InvalidStep steps rup_info rat_info -> 
         rup_failure (steps ++ cnf) rup_info /\ rat_failure (steps ++ cnf) rat_info
@@ -1698,69 +1699,69 @@ let check_rat (cnf : cnf) (c : clause) : option rat_info =
         end
     end
 
-let rec check_proof (cnf : cnf) (pf : proof) (steps : cnf) (ghost orig : cnf) : result =
+let rec check_proof (cnf : cnf) (pf : proof) (steps : cnf) (ts : list tautology) (ghost orig : cnf) : result =
     requires { cnf = steps ++ orig }
     requires { no_redundant_clauses cnf /\ no_trivial_clauses cnf }
     requires { no_redundant_clauses pf /\ no_trivial_clauses pf }
     ensures { match result with
-              | Valid -> valid_proof cnf pf
+              | Valid _ -> valid_proof cnf pf
               | _ -> proof_failure orig result
               end }
     variant { pf }
     match pf with
     | Nil -> 
         match check_rup cnf Nil with
-        | None -> Valid
+        | None -> Valid (Cons Rup ts)
         | Some rup_info -> InvalidEmpty steps rup_info
         end
     | Cons c cs -> 
         match check_rup cnf c with
-        | None -> check_proof (Cons c cnf) cs (Cons c steps) orig
+        | None -> check_proof (Cons c cnf) cs (Cons c steps) (Cons Rup ts) orig
         | Some rup_info ->
             match c with
             | Nil -> InvalidEmpty steps rup_info
             | _ ->
                 match check_rat cnf c with
-                | None -> check_proof (Cons c cnf) cs (Cons c steps) orig
+                | None -> check_proof (Cons c cnf) cs (Cons c steps) (Cons Rat ts) orig
                 | Some rat_info -> InvalidStep steps rup_info rat_info
                 end
             end
         end
     end
 
-let rec check_derivation (cnf : cnf) (pf : proof) (steps : cnf) (ghost orig : cnf) : result =
+let rec check_derivation (cnf : cnf) (pf : proof) (steps : cnf) (ts : list tautology) (ghost orig : cnf) : result =
     requires { cnf = steps ++ orig }
     requires { no_redundant_clauses cnf /\ no_trivial_clauses cnf }
     requires { no_redundant_clauses pf /\ no_trivial_clauses pf }
     ensures { match result with
-              | Valid -> valid_derivation cnf pf
+              | Valid _ -> valid_derivation cnf pf
               | _ -> proof_failure orig result
               end }
     variant { pf }
     match pf with
-    | Nil -> Valid
-  | Cons c Nil -> 
-    match check_rup cnf c with
-    | None -> Valid
-    | Some rup_info -> 
-      match c with
-      | Nil -> InvalidEmpty steps rup_info
-      | _ -> 
-        match check_rat cnf c with
-        | None -> Valid
-        | Some rat_info -> InvalidStep steps rup_info rat_info
+    | Nil -> Valid Nil
+    | Cons c Nil -> 
+        match check_rup cnf c with
+        | None -> Valid (Cons Rup ts)
+        | Some rup_info -> 
+            match c with
+            | Nil -> InvalidEmpty steps rup_info
+            | _ -> 
+                match check_rat cnf c with
+                | None -> Valid (Cons Rat ts)
+                | Some rat_info -> InvalidStep steps rup_info rat_info
+                end
+            end
         end
-      end
-    end
     | Cons c cs -> 
         match check_rup cnf c with
-        | None -> check_derivation (Cons c cnf) cs (Cons c steps) orig
+        | None -> check_derivation (Cons c cnf) cs (Cons c steps) (Cons Rup ts) orig
         | Some rup_info ->
             match c with
             | Nil -> InvalidEmpty steps rup_info
             | _ ->
                 match check_rat cnf c with
-                | None -> check_derivation (Cons c cnf) cs (Cons c steps) orig
+                | None -> check_derivation (Cons c cnf) cs (Cons c steps) (Cons Rat ts) orig
                 | Some rat_info -> InvalidStep steps rup_info rat_info
                 end
             end

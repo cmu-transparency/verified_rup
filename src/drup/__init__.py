@@ -60,7 +60,14 @@ class _Ratinfo_struct(ctypes.Structure):
     return f"_Ratinfo_struct({rat_clause}, {pivot_clause}, {rup_info})"
 
 class _Result_struct(ctypes.Structure):
-  _fields_=[("valid", ctypes.c_int), ("steps", _Cnf_struct), ("rup_info", _Rupinfo_struct), ("rat_info", _Ratinfo_struct), ("root", ctypes.c_void_p)]
+  _fields_=[
+    ("valid", ctypes.c_int),
+    ("tautologies", ctypes.POINTER(ctypes.c_int)),
+    ("tautologies_len", ctypes.c_int),
+    ("steps", _Cnf_struct), ("rup_info",_Rupinfo_struct),
+    ("rat_info", _Ratinfo_struct),
+    ("root", ctypes.c_void_p)
+  ]
 
   def __str__(self):
     steps = ", ".join(str(self.steps.clauses[i]) for i in range(self.steps.len))

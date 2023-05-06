@@ -24,6 +24,7 @@ Chain = Iterable[Lit]
 Proof = Cnf
 
 Outcome = Enum("Outcome", ["VALID", "INVALID"])
+Tautology = Enum("Tautology", ["RUP", "RAT"])
 
 class RupInfo:
   """
@@ -75,6 +76,9 @@ class CheckerResult:
       succeeded, this will be Outcome.VALID. If the check failed,
       this will be Outcome.INVALID.
 
+    tautologies (`Optional[Iterable[Tautology]]`): If the check succeeded,
+      a list of which type of tautologies were found at each step of the proof.
+
     steps (`Optional[Cnf]`): Completed proof steps prior to an invalid step, 
       if the proof was invalid.
 
@@ -86,18 +90,38 @@ class CheckerResult:
       be the same as the RUP clause in `rup_info`.
   """
 
-  def __init__(self, outcome : Outcome, steps : Optional[Cnf], rup_info : Optional[RupInfo], rat_info : Optional[RatInfo]):
+  def __init__(
+    self, 
+    outcome : Outcome,
+    tautologies : Optional[Iterable[Tautology]],
+    steps : Optional[Cnf], 
+    rup_info : Optional[RupInfo], 
+    rat_info : Optional[RatInfo]
+  ):
     self.outcome = outcome
+    self.tautologies = tautologies
     self.steps = steps
     self.rup_info = rup_info
     self.rat_info = rat_info
 
-  def __str__(self):
+  def __str__(self, max_tautologies=5):
     if self.outcome == Outcome.VALID:
-      return f"CheckerResult({self.outcome})"
+      if self.tautologies is not None:
+        if len(self.tautologies) <= max_tautologies:
+          tauts = ", ".join(
+            "RUP" if taut == Tautology.RUP else "RAT"
+            for taut in self.tautologies
+          )
+          return f"CheckerResult({self.outcome}, [{tauts}])"
+        else:
+          n_rup = sum(1 for taut in self.tautologies if taut == Tautology.RUP)
+          n_rat = len(self.tautologies) - n_rup
+          return f"CheckerResult({self.outcome}, [{n_rup} RUP, {n_rat} RAT])"
+      else:
+        return f"CheckerResult({self.outcome})"
     else:
       if self.steps is not None and self.rup_info is not None and self.rat_info is not None:
-        steps = " ".join(str(step) for step in self.steps)
+        steps = ", ".join(str(step) for step in self.steps)
         rup = str(self.rup_info)
         rat = str(self.rat_info)
         return f"CheckerResult({self.outcome}, [{steps}], {rup}, {rat})"
@@ -243,11 +267,13 @@ def _check_proof_from_structs(
   if verbose:
     result = _checker.check(ctypes.byref(formula), ctypes.byref(proof)).contents
     if result.valid > 0:
+      tauts = [Tautology.RUP if result.tautologies[i] == 0 else Tautology.RAT for i in range(result.tautologies_len)]
       _checker.free_result(result)
-      return CheckerResult(Outcome.VALID, None, None, None)
+      return CheckerResult(Outcome.VALID, tauts, None, None, None)
     else:
       res = CheckerResult(
               Outcome.INVALID,
+              None,
               _struct_to_cnf(result.steps),
               RupInfo(
                 _struct_to_clause(result.rup_info.clause),
@@ -273,10 +299,10 @@ def _check_proof_from_structs(
     result = _checker.check_fast(ctypes.byref(formula), ctypes.byref(proof)).contents
     if result.valid > 0:
       _checker.free_result(result)
-      return CheckerResult(Outcome.VALID, None, None, None)
+      return CheckerResult(Outcome.VALID, None, None, None, None)
     else:
       _checker.free_result(result)
-      return CheckerResult(Outcome.INVALID, None, None, None)
+      return CheckerResult(Outcome.INVALID, None, None, None, None)
 
 def check_proof(formula : Cnf, proof : Proof, verbose : bool = False) -> CheckerResult:
   """Check a sequence of RUP and RAT clauses against a CNF. Inputs are Python iterables
